@@ -1,0 +1,140 @@
+import { unified } from 'unified'
+import remarkParse from 'remark-parse'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import remarkRehype from 'remark-rehype'
+import rehypeKatex from 'rehype-katex'
+import rehypeHighlight from 'rehype-highlight'
+import rehypeSlug from 'rehype-slug'
+import rehypeAutolinkHeadings from 'rehype-autolink-headings'
+import rehypeStringify from 'rehype-stringify'
+import matter from 'gray-matter'
+import { type TocItem, type ParsedMarkdown, type MarkdownFrontmatter } from '@/types'
+import { calculateReadingTime } from './utils'
+
+// ============================================================
+// Markdown → HTML 转换
+// ============================================================
+export async function parseMarkdown(raw: string): Promise<ParsedMarkdown> {
+  // 1. 解析 frontmatter
+  const { content: markdownContent, data } = matter(raw)
+
+  // 2. 提取 TOC（在处理前扫描标题）
+  const toc = extractToc(markdownContent)
+
+  // 3. 使用 unified 流水线转换
+  const result = await unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeKatex, { strict: false })
+    .use(rehypeHighlight, { detect: true, ignoreMissing: true })
+    .use(rehypeSlug)
+    .use(rehypeAutolinkHeadings, {
+      behavior: 'wrap',
+      properties: { className: ['anchor-link'] },
+    })
+    .use(rehypeStringify, { allowDangerousHtml: true })
+    .process(markdownContent)
+
+  return {
+    content: String(result),
+    toc,
+    frontmatter: data as MarkdownFrontmatter,
+  }
+}
+
+// ============================================================
+// 从 Markdown 原文提取目录结构
+// ============================================================
+export function extractToc(markdown: string): TocItem[] {
+  const headingRegex = /^(#{1,4})\s+(.+)$/gm
+  const flat: TocItem[] = []
+  let match: RegExpExecArray | null
+
+  while ((match = headingRegex.exec(markdown)) !== null) {
+    const level = match[1].length
+    const text = match[2].replace(/[*_`]/g, '').trim()
+    const id = text
+      .toLowerCase()
+      .replace(/[\s]+/g, '-')
+      .replace(/[^\w\u4e00-\u9fa5-]/g, '')
+
+    flat.push({ id, text, level, children: [] })
+  }
+
+  return buildTocTree(flat)
+}
+
+function buildTocTree(flat: TocItem[]): TocItem[] {
+  const root: TocItem[] = []
+  const stack: TocItem[] = []
+
+  for (const item of flat) {
+    const node = { ...item, children: [] }
+
+    while (stack.length > 0 && stack[stack.length - 1].level >= node.level) {
+      stack.pop()
+    }
+
+    if (stack.length === 0) {
+      root.push(node)
+    } else {
+      stack[stack.length - 1].children.push(node)
+    }
+
+    stack.push(node)
+  }
+
+  return root
+}
+
+// ============================================================
+// 解析 Frontmatter（仅提取元数据，不处理正文）
+// ============================================================
+export function parseFrontmatter(raw: string): {
+  frontmatter: MarkdownFrontmatter
+  content: string
+} {
+  const { data, content } = matter(raw)
+  return { frontmatter: data as MarkdownFrontmatter, content }
+}
+
+// ============================================================
+// 从文件路径 + 内容生成 Post 元数据
+// ============================================================
+export function extractPostMeta(raw: string, filePath: string) {
+  const { frontmatter, content } = parseFrontmatter(raw)
+  const readingTime = calculateReadingTime(content)
+
+  // slug 优先从 frontmatter 取，其次从文件名
+  const filename = filePath.split('/').pop()?.replace(/\.md$/, '') ?? 'untitled'
+  const id = typeof frontmatter.slug === 'string' ? frontmatter.slug : filename
+
+  return {
+    id,
+    title: frontmatter.title ?? 'Untitled',
+    category: frontmatter.category ?? 'others',
+    subcategory: frontmatter.subcategory ?? null,
+    tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
+    status: (frontmatter.status === 'published' ? 'PUBLISHED' : 'DRAFT') as 'DRAFT' | 'PUBLISHED',
+    summary: frontmatter.summary ?? null,
+    readingTime,
+    filePath,
+    publishedAt: frontmatter.publishedAt ? new Date(frontmatter.publishedAt) : null,
+  }
+}
+
+// ============================================================
+// 将双向链接 [[title]] 转换为 HTML 链接
+// ============================================================
+export function resolveWikiLinks(html: string, slugMap: Record<string, string>): string {
+  return html.replace(/\[\[([^\]]+)\]\]/g, (_, title) => {
+    const slug = slugMap[title]
+    if (slug) {
+      return `<a href="/post/${slug}" class="wiki-link">${title}</a>`
+    }
+    return `<span class="wiki-link-missing">${title}</span>`
+  })
+}

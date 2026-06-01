@@ -1,0 +1,63 @@
+services:
+  # ─────────────────────────────────────────
+  # Next.js 应用
+  # ─────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: knowledge-blog-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./content:/app/content          # Markdown 内容（Git 管理）
+      - ./public/uploads:/app/public/uploads  # 用户上传附件
+      - ./prisma:/app/prisma            # 数据库文件
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    depends_on:
+      - meilisearch
+    networks:
+      - blog-net
+
+  # ─────────────────────────────────────────
+  # Meilisearch（Phase 2 全文搜索）
+  # ─────────────────────────────────────────
+  meilisearch:
+    image: getmeili/meilisearch:v1.9
+    container_name: knowledge-blog-search
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7700:7700"   # 仅本机访问，通过 Nginx 代理
+    volumes:
+      - meili_data:/meili_data
+    environment:
+      - MEILI_MASTER_KEY=${MEILISEARCH_API_KEY:-local-dev-master-key-16b}
+      - MEILI_ENV=production
+    networks:
+      - blog-net
+
+  # ─────────────────────────────────────────
+  # Qdrant（Phase 3 向量数据库 / RAG）
+  # ─────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: knowledge-blog-vector
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"   # 仅本机访问
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - blog-net
+
+volumes:
+  meili_data:
+  qdrant_data:
+
+networks:
+  blog-net:
+    driver: bridge

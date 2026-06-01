@@ -1,0 +1,620 @@
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Mulish:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   设计系统 · 共享变量
+   ============================================================ */
+:root {
+  --font-serif: 'Crimson Pro', 'Georgia', 'Times New Roman', serif;
+  --font-sans:  'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:  'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* 主题选择器预览色块（全局定义，下拉菜单内始终可见） */
+  --theme-swatch-classic: linear-gradient(135deg, #F6F3ED 50%, #1A8A9A 50%);
+  --theme-swatch-dark: linear-gradient(135deg, #1C1917 50%, #F0B45A 50%);
+  --theme-swatch-eye: linear-gradient(135deg, #E8F2E6 50%, #1B6B38 50%);
+  --theme-swatch-parchment: linear-gradient(135deg, #F2E6C8 50%, #A0522D 50%);
+  --theme-swatch-ink: linear-gradient(135deg, #EEF2F7 50%, #3B5BDB 50%);
+}
+
+/* ── 1. 经典（默认）UI 琥珀 · 粒子青蓝 ── */
+:root,
+[data-theme='classic'] {
+  --accent:        #9A5B28;
+  --accent-light:  #B87333;
+  --accent-subtle: #F5EDE3;
+
+  --bg-base:     #F6F3ED;
+  --bg-surface:  #EFEBE3;
+  --bg-elevated: rgba(255, 255, 255, 0.88);
+  --bg-sunken:   #E6E0D6;
+
+  --text-primary:   #1A1714;
+  --text-secondary: #524C44;
+  --text-tertiary:  #8A8278;
+  --text-accent:    #9A5B28;
+
+  --border-subtle:  rgba(26, 23, 20, 0.08);
+  --border-default: rgba(26, 23, 20, 0.14);
+  --border-strong:  rgba(26, 23, 20, 0.24);
+
+  --shadow-sm: 0 1px 3px rgba(28,25,22,0.07), 0 1px 2px rgba(28,25,22,0.04);
+  --shadow-md: 0 4px 14px rgba(28,25,22,0.09), 0 2px 4px rgba(28,25,22,0.05);
+  --shadow-lg: 0 12px 32px rgba(28,25,22,0.11), 0 4px 8px rgba(28,25,22,0.06);
+
+  --particle-color: #1A8A9A;
+  --particle-link-color: #14727F;
+  --particle-link-opacity: 0.42;
+  --particle-fallback-glow: rgba(26, 138, 154, 0.14);
+
+  --code-bg: #E8E2D8;
+  --code-border: rgba(26, 23, 20, 0.12);
+  --code-fg: #1A1714;
+  --code-inline-bg: #E8E2D8;
+  --code-inline-fg: #9A5B28;
+}
+
+/* ── 2. 暗黑 UI 暖灰 · 粒子琥珀金（参考 GitHub Dark Dimmed / Notion 分层灰） ── */
+[data-theme='dark'] {
+  --accent:        #E5A85C;
+  --accent-light:  #F0BC72;
+  --accent-subtle: #3A2E22;
+
+  --bg-base:     #1C1917;
+  --bg-surface:  #252220;
+  --bg-elevated: #2E2B28;
+  --bg-sunken:   #1A1816;
+
+  --text-primary:   #EDE6DC;
+  --text-secondary: #B5A898;
+  --text-tertiary:  #8A7F76;
+  --text-accent:    #E5A85C;
+
+  --border-subtle:  rgba(237, 230, 218, 0.09);
+  --border-default: rgba(237, 230, 218, 0.16);
+  --border-strong:  rgba(237, 230, 218, 0.28);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.38);
+
+  --particle-color: #F0B45A;
+  --particle-link-color: #D4944A;
+  --particle-link-opacity: 0.36;
+  --particle-fallback-glow: rgba(240, 180, 90, 0.1);
+
+  --code-bg: #161412;
+  --code-border: rgba(237, 230, 218, 0.14);
+  --code-fg: #C9D1D9;
+  --code-inline-bg: #2A2623;
+  --code-inline-fg: #E5A85C;
+}
+
+/* ── 3. 护眼 UI 浅绿 · 粒子深绿 ── */
+[data-theme='eye'] {
+  --accent:        #3D7A52;
+  --accent-light:  #4F9468;
+  --accent-subtle: #D8EBDC;
+
+  --bg-base:     #E8F2E6;
+  --bg-surface:  #DCEADC;
+  --bg-elevated: rgba(244, 250, 243, 0.9);
+  --bg-sunken:   #C8DCC6;
+
+  --text-primary:   #1A2E1F;
+  --text-secondary: #3F5C48;
+  --text-tertiary:  #6B8872;
+  --text-accent:    #2D6B42;
+
+  --border-subtle:  rgba(26, 46, 31, 0.08);
+  --border-default: rgba(26, 46, 31, 0.14);
+  --border-strong:  rgba(26, 46, 31, 0.22);
+
+  --shadow-sm: 0 1px 3px rgba(30,60,40,0.06);
+  --shadow-md: 0 4px 12px rgba(30,60,40,0.08);
+  --shadow-lg: 0 12px 28px rgba(30,60,40,0.1);
+
+  --particle-color: #1B6B38;
+  --particle-link-color: #145A2E;
+  --particle-link-opacity: 0.4;
+  --particle-fallback-glow: rgba(27, 107, 56, 0.12);
+}
+
+/* ── 4. 羊皮卷 UI 米黄 · 粒子赭石 ── */
+[data-theme='parchment'] {
+  --accent:        #7A4E28;
+  --accent-light:  #946038;
+  --accent-subtle: #EDE0C4;
+
+  --bg-base:     #F2E6C8;
+  --bg-surface:  #E8D9B8;
+  --bg-elevated: rgba(252, 245, 228, 0.92);
+  --bg-sunken:   #D9C9A3;
+
+  --text-primary:   #3A2E1E;
+  --text-secondary: #6B5A42;
+  --text-tertiary:  #9A8868;
+  --text-accent:    #7A4E28;
+
+  --border-subtle:  rgba(58, 46, 30, 0.1);
+  --border-default: rgba(58, 46, 30, 0.16);
+  --border-strong:  rgba(58, 46, 30, 0.26);
+
+  --shadow-sm: 0 1px 3px rgba(80,60,30,0.08);
+  --shadow-md: 0 4px 12px rgba(80,60,30,0.1);
+  --shadow-lg: 0 12px 28px rgba(80,60,30,0.12);
+
+  --particle-color: #A0522D;
+  --particle-link-color: #8B4513;
+  --particle-link-opacity: 0.38;
+  --particle-fallback-glow: rgba(160, 82, 45, 0.14);
+}
+
+/* ── 5. 墨韵 UI 冷灰 · 粒子靛蓝 ── */
+[data-theme='ink'] {
+  --accent:        #3D5A80;
+  --accent-light:  #4E6F9A;
+  --accent-subtle: #D8E4F0;
+
+  --bg-base:     #EEF2F7;
+  --bg-surface:  #E2E9F2;
+  --bg-elevated: rgba(248, 250, 252, 0.9);
+  --bg-sunken:   #D4DCE8;
+
+  --text-primary:   #1A2433;
+  --text-secondary: #445268;
+  --text-tertiary:  #728096;
+  --text-accent:    #3D5A80;
+
+  --border-subtle:  rgba(26, 36, 51, 0.08);
+  --border-default: rgba(26, 36, 51, 0.14);
+  --border-strong:  rgba(26, 36, 51, 0.24);
+
+  --shadow-sm: 0 1px 3px rgba(30,50,80,0.07);
+  --shadow-md: 0 4px 12px rgba(30,50,80,0.09);
+  --shadow-lg: 0 12px 28px rgba(30,50,80,0.11);
+
+  --particle-color: #3B5BDB;
+  --particle-link-color: #2F4BB5;
+  --particle-link-opacity: 0.4;
+  --particle-fallback-glow: rgba(59, 91, 219, 0.12);
+}
+
+/* ============================================================
+   全站粒子背景
+   ============================================================ */
+.site-particles-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.site-particles-canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.site-particles-canvas canvas {
+  display: block;
+}
+
+.site-particles-fallback {
+  background: radial-gradient(
+    ellipse 120% 80% at 50% 0%,
+    var(--particle-fallback-glow) 0%,
+    transparent 55%
+  );
+}
+
+.site-particles-loading {
+  animation: site-particles-pulse 2s ease-in-out infinite;
+}
+
+@keyframes site-particles-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.site-particles-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 100% 90% at 50% 40%,
+    transparent 0%,
+    color-mix(in srgb, var(--bg-base) 8%, transparent) 50%,
+    color-mix(in srgb, var(--bg-base) 35%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.site-shell-content {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 深色主题：卡片与代码块增强对比 */
+[data-theme='dark'] .card {
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+}
+
+[data-theme='dark'] .markdown-body pre {
+  background: var(--code-bg) !important;
+  border-color: var(--code-border);
+}
+
+[data-theme='dark'] .markdown-body pre code,
+[data-theme='dark'] .markdown-body pre .hljs {
+  background: transparent !important;
+  color: var(--code-fg);
+}
+
+[data-theme='dark'] .markdown-body code:not(pre code) {
+  background: var(--code-inline-bg);
+  color: var(--code-inline-fg);
+  border-color: var(--code-border);
+}
+
+[data-theme='dark'] .markdown-body th {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .markdown-body td {
+  border-color: var(--border-subtle);
+}
+
+[data-theme='dark'] .markdown-body blockquote {
+  background: var(--accent-subtle);
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .katex,
+[data-theme='dark'] .katex-display {
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   基础重置
+   ============================================================ */
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    background-color: var(--bg-base);
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body { min-height: 100vh; }
+
+  ::selection {
+    background-color: var(--accent-subtle);
+    color: var(--text-accent);
+  }
+
+  /* 滚动条 */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+  /* 链接 */
+  a { color: inherit; text-decoration: none; }
+}
+
+/* ============================================================
+   通用组件
+   ============================================================ */
+@layer components {
+  /* 卡片 */
+  .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+  }
+  .card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+  }
+
+  /* 按钮 */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.15s;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: var(--accent-light); filter: brightness(1.05); }
+
+  .btn-secondary {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border-color: var(--border-default);
+  }
+  .btn-secondary:hover {
+    background: var(--bg-sunken);
+    border-color: var(--border-strong);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+  }
+
+  /* 输入框 */
+  .input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+  }
+  .input::placeholder { color: var(--text-tertiary); }
+
+  /* 分割线 */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* 徽章 */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+}
+
+/* ============================================================
+   Markdown 内容区域
+   ============================================================ */
+.markdown-body {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.85;
+  color: var(--text-primary);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  color: var(--text-primary);
+  margin-top: 2em;
+  margin-bottom: 0.75em;
+  scroll-margin-top: 80px;
+}
+
+.markdown-body h1 { font-size: 1.9em; letter-spacing: -0.02em; }
+.markdown-body h2 {
+  font-size: 1.5em;
+  letter-spacing: -0.015em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.markdown-body h3 { font-size: 1.25em; }
+.markdown-body h4 { font-size: 1.1em; }
+
+.markdown-body p { margin: 1.2em 0; }
+
+.markdown-body a {
+  color: var(--text-accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-subtle);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+.markdown-body a:hover { text-decoration-color: var(--accent); }
+
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--code-inline-bg, var(--bg-sunken));
+  color: var(--code-inline-fg, var(--accent));
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid var(--code-border, var(--border-subtle));
+}
+
+.markdown-body pre {
+  background: var(--code-bg, var(--bg-sunken)) !important;
+  border: 1px solid var(--code-border, var(--border-default));
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  position: relative;
+  margin: 1.5em 0;
+}
+
+.markdown-body pre code {
+  background: none !important;
+  border: none;
+  padding: 0;
+  color: var(--code-fg, var(--text-primary));
+  font-size: 0.875em;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 0.75em 1.5em;
+  margin: 1.5em 0;
+  background: var(--accent-subtle);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-family: var(--font-serif);
+  font-size: 1.05em;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.9em;
+}
+.markdown-body th {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 0.6em 1em;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.markdown-body td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.6em 1em;
+}
+.markdown-body tr:hover td { background: var(--bg-surface); }
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: 2em 0;
+}
+
+.markdown-body ul, .markdown-body ol {
+  padding-left: 1.5em;
+  margin: 1em 0;
+}
+.markdown-body li { margin: 0.35em 0; }
+
+/* 锚点链接 */
+.anchor-link { color: inherit; }
+.anchor-link:hover::after {
+  content: ' #';
+  color: var(--text-tertiary);
+}
+
+/* Wiki 链接 */
+.wiki-link {
+  color: var(--accent);
+  border-bottom: 1px dashed var(--accent);
+}
+.wiki-link-missing {
+  color: var(--text-tertiary);
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+/* ============================================================
+   代码块拷贝按钮
+   ============================================================ */
+.code-block-wrapper { position: relative; }
+.copy-btn {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  font-family: var(--font-sans);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.code-block-wrapper:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { background: var(--bg-surface); color: var(--text-primary); }
+
+/* ============================================================
+   阅读进度条
+   ============================================================ */
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  z-index: 9999;
+  transition: width 0.1s linear;
+}
+
+/* ============================================================
+   KaTeX 数学公式
+   ============================================================ */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+}
+
+/* ============================================================
+   动画
+   ============================================================ */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 25%,
+    var(--bg-sunken) 50%,
+    var(--bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+terminals
+agent-transcripts
+mcps

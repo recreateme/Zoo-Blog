@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id          String     @id                 // slug，同时作为 URL
+  title       String
+  content     String                         // Markdown 原文
+  summary     String?                        // AI 生成摘要
+  category    String
+  subcategory String?
+  tags        String     @default("[]")      // JSON 字符串数组
+  status      String     @default("DRAFT")   // DRAFT | PUBLISHED
+  readingTime Int?                           // 分钟
+  filePath    String?                        // content/ 目录下的相对路径
+  viewCount   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  publishedAt DateTime?
+
+  attachments Attachment[]
+  linksFrom   PostLink[] @relation("FromPost")
+  linksTo     PostLink[] @relation("ToPost")
+  pageViews   PageView[]
+
+  @@index([category])
+  @@index([status])
+  @@index([publishedAt])
+}
+
+model Attachment {
+  id           String         @id @default(uuid())
+  originalName String                              // 用户上传的原始文件名
+  storedKey    String                              // 存储的 UUID 文件名
+  url          String                              // 访问 URL
+  type         String         // IMAGE | PDF | WORD | OTHER
+  mimeType     String?
+  size         Int                                 // 字节
+  width        Int?                                // 图片宽度
+  height       Int?                                // 图片高度
+  postId       String?
+  post         Post?          @relation(fields: [postId], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+
+  @@index([postId])
+}
+
+model PostLink {
+  fromPostId String
+  toPostId   String
+  fromPost   Post   @relation("FromPost", fields: [fromPostId], references: [id], onDelete: Cascade)
+  toPost     Post   @relation("ToPost", fields: [toPostId], references: [id], onDelete: Cascade)
+
+  @@id([fromPostId, toPostId])
+}
+
+model PageView {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@index([createdAt])
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String                         // bcrypt hash
+  name      String?
+  role      String   @default("ADMIN")     // ADMIN | EDITOR
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SiteConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
