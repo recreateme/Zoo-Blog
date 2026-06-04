@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { parseTags, stringifyTags, calculateReadingTime } from '@/lib/utils'
+import { parseTags, stringifyTags, computePostStats } from '@/lib/utils'
 import { z } from 'zod'
 
 const CreatePostSchema = z.object({
@@ -11,6 +11,8 @@ const CreatePostSchema = z.object({
   content: z.string(),
   category: z.string().min(1),
   subcategory: z.string().optional(),
+  series: z.string().optional(),
+  seriesOrder: z.number().int().optional(),
   tags: z.array(z.string()).optional().default([]),
   status: z.enum(['DRAFT', 'PUBLISHED']).optional().default('DRAFT'),
   summary: z.string().optional(),
@@ -40,6 +42,7 @@ export async function GET(req: NextRequest) {
       take: pageSize,
       select: {
         id: true, title: true, summary: true, category: true, subcategory: true,
+        series: true, seriesOrder: true, wordCount: true,
         tags: true, status: true, readingTime: true, viewCount: true,
         createdAt: true, updatedAt: true, publishedAt: true,
       },
@@ -72,8 +75,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Slug 已存在，请换一个' }, { status: 409 })
     }
 
-    const readingTime = calculateReadingTime(data.content)
+    const { readingTime, wordCount } = computePostStats(data.content)
     const publishedAt = data.status === 'PUBLISHED' ? new Date() : null
+    const series = data.series?.trim() || null
 
     const post = await prisma.post.create({
       data: {
@@ -82,10 +86,13 @@ export async function POST(req: NextRequest) {
         content: data.content,
         category: data.category,
         subcategory: data.subcategory ?? null,
+        series,
+        seriesOrder: series ? (data.seriesOrder ?? null) : null,
         tags: stringifyTags(data.tags),
         status: data.status,
         summary: data.summary ?? null,
         readingTime,
+        wordCount,
         publishedAt,
       },
     })

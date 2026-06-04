@@ -1,16 +1,24 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { CalendarDays, Clock, Eye, ArrowLeft, Tag } from 'lucide-react'
+import { CalendarDays, Clock, Eye, Tag, ExternalLink, Pencil } from 'lucide-react'
 import prisma from '@/lib/db'
 import { parseMarkdown } from '@/lib/markdown'
-import { parseTags, formatDate, formatNumber } from '@/lib/utils'
+import { parseTags, formatDate, formatNumber, formatWordCount } from '@/lib/utils'
 import { getCategoryById } from '@/lib/categories'
+import { getPostAdjacency, getSeriesPosts } from '@/lib/post-navigation'
+import { getArticleOutline } from '@/lib/outline'
 import Badge from '@/components/ui/Badge'
+import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import TableOfContents from '@/components/post/TableOfContents'
+import ArticleOutline from '@/components/post/ArticleOutline'
 import MarkdownRenderer from '@/components/post/MarkdownRenderer'
 import ReadingProgress from '@/components/post/ReadingProgress'
 import PostCard from '@/components/post/PostCard'
+import PostNav from '@/components/post/PostNav'
+import SeriesNav from '@/components/post/SeriesNav'
+import MobileToc from '@/components/post/MobileToc'
+import { getEditOnGitHubUrl } from '@/lib/content-links'
 import type { PostMeta } from '@/types'
 
 interface PostPageProps {
@@ -24,22 +32,77 @@ async function getPost(slug: string) {
   return post
 }
 
-async function getRelatedPosts(postId: string, category: string): Promise<PostMeta[]> {
-  const posts = await prisma.post.findMany({
-    where: { status: 'PUBLISHED', category, id: { not: postId } },
-    orderBy: { publishedAt: 'desc' },
-    take: 4,
-    select: {
-      id: true, title: true, summary: true, category: true, subcategory: true,
-      tags: true, status: true, readingTime: true, viewCount: true,
-      createdAt: true, publishedAt: true,
-    },
-  })
-  return posts.map((p: { id: string; title: string; summary: string | null; category: string; subcategory: string | null; tags: string; status: string; readingTime: number | null; viewCount: number; createdAt: Date; publishedAt: Date | null }) => ({
+const postListSelect = {
+  id: true,
+  title: true,
+  summary: true,
+  category: true,
+  subcategory: true,
+  series: true,
+  tags: true,
+  status: true,
+  readingTime: true,
+  viewCount: true,
+  createdAt: true,
+  publishedAt: true,
+} as const
+
+function mapToPostMeta(
+  p: {
+    id: string
+    title: string
+    summary: string | null
+    category: string
+    subcategory: string | null
+    series?: string | null
+    tags: string
+    status: string
+    readingTime: number | null
+    viewCount: number
+    createdAt: Date
+    publishedAt: Date | null
+  }
+): PostMeta {
+  return {
     ...p,
     tags: parseTags(p.tags as string),
     status: p.status as 'DRAFT' | 'PUBLISHED',
-  }))
+  }
+}
+
+async function getRelatedPosts(
+  postId: string,
+  category: string,
+  series: string | null
+): Promise<PostMeta[]> {
+  const seriesName = series?.trim() || null
+  const related: PostMeta[] = []
+
+  if (seriesName) {
+    const inSeries = await prisma.post.findMany({
+      where: { status: 'PUBLISHED', category, series: seriesName, id: { not: postId } },
+      orderBy: [{ seriesOrder: 'asc' }, { publishedAt: 'desc' }],
+      take: 4,
+      select: postListSelect,
+    })
+    related.push(...inSeries.map(mapToPostMeta))
+  }
+
+  if (related.length < 4) {
+    const more = await prisma.post.findMany({
+      where: {
+        status: 'PUBLISHED',
+        category,
+        id: { notIn: [postId, ...related.map((p) => p.id)] },
+      },
+      orderBy: { publishedAt: 'desc' },
+      take: 4 - related.length,
+      select: postListSelect,
+    })
+    related.push(...more.map(mapToPostMeta))
+  }
+
+  return related.slice(0, 4)
 }
 
 async function incrementViewCount(slug: string) {
@@ -79,8 +142,15 @@ export default async function PostPage({ params }: PostPageProps) {
   const category = getCategoryById(post.category)
 
   // 并行获取相关文章 + 增加访问量
-  const [relatedPosts] = await Promise.all([
-    getRelatedPosts(post.id, post.category),
+  const outlineItems = getArticleOutline(post.content, post.summary, post.outline)
+  const editUrl = getEditOnGitHubUrl(post.filePath)
+
+  const seriesName = post.series?.trim() || null
+
+  const [relatedPosts, adjacency, seriesPosts] = await Promise.all([
+    getRelatedPosts(post.id, post.category, post.series),
+    getPostAdjacency(post.id, post.category, post.series),
+    seriesName ? getSeriesPosts(post.category, seriesName) : Promise.resolve([]),
     incrementViewCount(post.id),
   ])
 
@@ -92,15 +162,11 @@ export default async function PostPage({ params }: PostPageProps) {
         <div className="flex gap-12">
           {/* 主内容 */}
           <article className="flex-1 min-w-0">
-            {/* 返回按钮 */}
-            <Link
-              href={category ? `/${category.id}` : '/'}
-              className="inline-flex items-center gap-1.5 text-sm mb-6 hover:text-[var(--accent)] transition-colors"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              <ArrowLeft size={14} />
-              {category ? `返回 ${category.name}` : '返回首页'}
-            </Link>
+            <Breadcrumbs
+              categoryId={post.category}
+              subcategory={post.subcategory}
+              currentTitle={post.title}
+            />
 
             {/* 文章头部 */}
             <header className="mb-8">
@@ -110,6 +176,9 @@ export default async function PostPage({ params }: PostPageProps) {
                 </Badge>
                 {post.subcategory && (
                   <Badge>{post.subcategory}</Badge>
+                )}
+                {seriesName && (
+                  <Badge>{seriesName}</Badge>
                 )}
               </div>
 
@@ -152,6 +221,9 @@ export default async function PostPage({ params }: PostPageProps) {
                   <CalendarDays size={13} />
                   {formatDate(post.publishedAt ?? post.createdAt)}
                 </span>
+                {post.wordCount != null && post.wordCount > 0 && (
+                  <span>{formatWordCount(post.wordCount)}</span>
+                )}
                 {post.readingTime && (
                   <span className="flex items-center gap-1.5">
                     <Clock size={13} />
@@ -164,8 +236,32 @@ export default async function PostPage({ params }: PostPageProps) {
                     {formatNumber(post.viewCount)} 次阅读
                   </span>
                 )}
+                {editUrl && (
+                  <a
+                    href={editUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 hover:text-[var(--accent)] transition-colors ml-auto"
+                  >
+                    <Pencil size={13} />
+                    编辑此页
+                    <ExternalLink size={11} />
+                  </a>
+                )}
               </div>
             </header>
+
+            <MobileToc toc={toc} />
+
+            {seriesName && seriesPosts.length > 0 && (
+              <SeriesNav
+                seriesName={seriesName}
+                currentId={post.id}
+                posts={seriesPosts}
+              />
+            )}
+
+            <ArticleOutline items={outlineItems} />
 
             {/* 正文 */}
             <MarkdownRenderer html={html} />
@@ -196,6 +292,8 @@ export default async function PostPage({ params }: PostPageProps) {
           )}
         </div>
 
+        <PostNav adjacency={adjacency} />
+
         {/* 相关文章 */}
         {relatedPosts.length > 0 && (
           <section className="mt-16">
@@ -203,7 +301,7 @@ export default async function PostPage({ params }: PostPageProps) {
               className="text-lg mb-5"
               style={{ fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}
             >
-              相关笔记
+              {seriesName ? '同专题笔记' : '相关笔记'}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {relatedPosts.map((post) => (

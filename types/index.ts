@@ -7,8 +7,12 @@ export interface Post {
   title: string
   content: string
   summary: string | null
+  outline: string | null
   category: string
   subcategory: string | null
+  series: string | null
+  seriesOrder: number | null
+  wordCount: number | null
   tags: string[]
   status: 'DRAFT' | 'PUBLISHED'
   readingTime: number | null
@@ -25,6 +29,9 @@ export interface PostMeta {
   summary: string | null
   category: string
   subcategory: string | null
+  series?: string | null
+  seriesOrder?: number | null
+  wordCount?: number | null
   tags: string[]
   status: 'DRAFT' | 'PUBLISHED'
   readingTime: number | null
@@ -90,6 +97,8 @@ export interface CreatePostInput {
   content: string
   category: string
   subcategory?: string
+  series?: string
+  seriesOrder?: number
   tags?: string[]
   status?: 'DRAFT' | 'PUBLISHED'
   summary?: string
@@ -101,6 +110,8 @@ export interface UpdatePostInput {
   content?: string
   category?: string
   subcategory?: string
+  series?: string
+  seriesOrder?: number
   tags?: string[]
   status?: 'DRAFT' | 'PUBLISHED'
   summary?: string
@@ -133,8 +144,12 @@ export interface TocItem {
 export interface MarkdownFrontmatter {
   title?: string
   summary?: string
+  outline?: string[]
   category?: string
   subcategory?: string
+  series?: string
+  order?: number
+  seriesOrder?: number
   tags?: string[]
   status?: 'draft' | 'published'
   publishedAt?: string

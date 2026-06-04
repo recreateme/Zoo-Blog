@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { parseTags, stringifyTags, calculateReadingTime } from '@/lib/utils'
+import { parseTags, stringifyTags, computePostStats } from '@/lib/utils'
 import { z } from 'zod'
 
 const UpdatePostSchema = z.object({
@@ -10,6 +10,8 @@ const UpdatePostSchema = z.object({
   content: z.string().optional(),
   category: z.string().optional(),
   subcategory: z.string().nullable().optional(),
+  series: z.string().nullable().optional(),
+  seriesOrder: z.number().int().nullable().optional(),
   tags: z.array(z.string()).optional(),
   status: z.enum(['DRAFT', 'PUBLISHED']).optional(),
   summary: z.string().nullable().optional(),
@@ -38,8 +40,18 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
     const existing = await prisma.post.findUnique({ where: { id: params.slug } })
     if (!existing) return NextResponse.json({ error: '文章不存在' }, { status: 404 })
 
-    // 更新阅读时长
-    const readingTime = data.content ? calculateReadingTime(data.content) : existing.readingTime
+    const contentForStats = data.content ?? existing.content
+    const stats = computePostStats(contentForStats)
+    const readingTime = data.content !== undefined ? stats.readingTime : existing.readingTime
+    const wordCount = data.content !== undefined ? stats.wordCount : existing.wordCount
+
+    const nextSeries =
+      data.series !== undefined ? (data.series?.trim() || null) : existing.series
+    const nextSeriesOrder = !nextSeries
+      ? null
+      : data.seriesOrder !== undefined
+        ? data.seriesOrder
+        : existing.seriesOrder
 
     // 发布时间处理
     let publishedAt = existing.publishedAt
@@ -54,10 +66,15 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
         ...(data.content !== undefined && { content: data.content }),
         ...(data.category && { category: data.category }),
         ...(data.subcategory !== undefined && { subcategory: data.subcategory }),
+        ...((data.series !== undefined || data.seriesOrder !== undefined) && {
+          series: nextSeries,
+          seriesOrder: nextSeriesOrder,
+        }),
         ...(data.tags !== undefined && { tags: stringifyTags(data.tags) }),
         ...(data.status && { status: data.status }),
         ...(data.summary !== undefined && { summary: data.summary }),
         readingTime,
+        wordCount,
         publishedAt,
       },
     })

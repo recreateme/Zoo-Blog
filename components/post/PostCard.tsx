@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Clock, Eye, CalendarDays } from 'lucide-react'
-import { cn, formatDate, formatNumber, parseTags } from '@/lib/utils'
+import { cn, formatDate, formatNumber, formatWordCount, parseTags } from '@/lib/utils'
 import { getCategoryById } from '@/lib/categories'
 import Badge from '@/components/ui/Badge'
 import type { PostMeta } from '@/types'
@@ -89,10 +89,15 @@ export default function PostCard({ post, variant = 'default' }: PostCardProps) {
         className="card rounded-xl p-5 flex flex-col gap-3"
       >
         {/* Top: category + date */}
-        <div className="flex items-center justify-between gap-2">
-          <Badge variant="category" categoryId={post.category}>
-            {category?.name ?? post.category}
-          </Badge>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge variant="category" categoryId={post.category}>
+              {category?.name ?? post.category}
+            </Badge>
+            {post.series?.trim() && (
+              <Badge>{post.series}</Badge>
+            )}
+          </div>
           <span className="text-xs shrink-0" style={{ color: 'var(--text-tertiary)' }}>
             {formatDate(post.publishedAt ?? post.createdAt)}
           </span>
@@ -131,6 +136,9 @@ export default function PostCard({ post, variant = 'default' }: PostCardProps) {
             className="flex items-center gap-3 text-xs shrink-0"
             style={{ color: 'var(--text-tertiary)' }}
           >
+            {post.wordCount != null && post.wordCount > 0 && (
+              <span>{formatWordCount(post.wordCount)}</span>
+            )}
             {post.readingTime && (
               <span className="flex items-center gap-1">
                 <Clock size={11} />

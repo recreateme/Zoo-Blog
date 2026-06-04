@@ -84,7 +84,24 @@ export default function Header() {
 
         {/* Right actions */}
         <div className="ml-auto flex items-center gap-2">
-          <Link href="/search" className="btn btn-ghost p-2" title="搜索">
+          <Link
+            href="/search"
+            className="btn btn-ghost p-2 hidden sm:flex items-center gap-1.5"
+            title="搜索 (Ctrl+K)"
+          >
+            <Search size={16} />
+            <kbd
+              className="text-[10px] px-1 py-0.5 rounded font-mono hidden lg:inline"
+              style={{
+                background: 'var(--bg-surface)',
+                color: 'var(--text-tertiary)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              ⌃K
+            </kbd>
+          </Link>
+          <Link href="/search" className="btn btn-ghost p-2 sm:hidden" title="搜索">
             <Search size={16} />
           </Link>
           <ThemeSwitcher />

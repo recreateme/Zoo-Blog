@@ -5,8 +5,9 @@ import { useParams } from 'next/navigation'
 import { Save, Sparkles, Loader2, Tag, ExternalLink, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIES } from '@/lib/categories'
-import { calculateReadingTime } from '@/lib/utils'
+import { computePostStats, formatWordCount } from '@/lib/utils'
 import MonacoEditor from '@/components/editor/MonacoEditor'
+import EditorSeriesFields from '@/components/editor/EditorSeriesFields'
 
 export default function EditEditorPage() {
   const params = useParams()
@@ -16,6 +17,8 @@ export default function EditEditorPage() {
   const [content, setContent] = useState('')
   const [category, setCategory] = useState('others')
   const [subcategory, setSubcategory] = useState('')
+  const [series, setSeries] = useState('')
+  const [seriesOrder, setSeriesOrder] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [summary, setSummary] = useState('')
@@ -37,6 +40,8 @@ export default function EditEditorPage() {
         setContent(p.content)
         setCategory(p.category)
         setSubcategory(p.subcategory ?? '')
+        setSeries(p.series ?? '')
+        setSeriesOrder(p.seriesOrder != null ? String(p.seriesOrder) : '')
         setTags(Array.isArray(p.tags) ? p.tags : [])
         setSummary(p.summary ?? '')
         setStatus(p.status)
@@ -105,6 +110,8 @@ export default function EditEditorPage() {
       body: JSON.stringify({
         title, content, category,
         subcategory: subcategory || null,
+        series: series.trim() || null,
+        seriesOrder: series.trim() && seriesOrder ? parseInt(seriesOrder, 10) : null,
         tags, status,
         summary: summary || null,
       }),
@@ -117,7 +124,7 @@ export default function EditEditorPage() {
       setError(data.error ?? '保存失败')
     }
     setSaving(false)
-  }, [slug, title, content, category, subcategory, tags, status, summary])
+  }, [slug, title, content, category, subcategory, series, seriesOrder, tags, status, summary])
 
   // Ctrl+S 快捷保存
   useEffect(() => {
@@ -139,7 +146,7 @@ export default function EditEditorPage() {
     )
   }
 
-  const readingTime = calculateReadingTime(content)
+  const { readingTime, wordCount } = computePostStats(content)
 
   return (
     <div className="flex flex-col h-screen">
@@ -163,6 +170,7 @@ export default function EditEditorPage() {
         )}
 
         <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          {formatWordCount(wordCount) && `${formatWordCount(wordCount)} · `}
           约 {readingTime} 分钟
         </span>
 
@@ -216,6 +224,13 @@ export default function EditEditorPage() {
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>子分类</label>
               <input type="text" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} className="input text-sm" placeholder="可选" />
             </div>
+
+            <EditorSeriesFields
+              series={series}
+              seriesOrder={seriesOrder}
+              onSeriesChange={setSeries}
+              onSeriesOrderChange={setSeriesOrder}
+            />
 
             <div>
               <div className="flex items-center justify-between mb-1.5">

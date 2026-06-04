@@ -57,12 +57,17 @@ export default function SearchClient() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
-      <h1
-        className="text-2xl mb-6"
-        style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, color: 'var(--text-primary)' }}
-      >
-        搜索笔记
-      </h1>
+      <div className="mb-6">
+        <h1
+          className="text-2xl mb-1"
+          style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, color: 'var(--text-primary)' }}
+        >
+          搜索笔记
+        </h1>
+        <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+          任意页面按 <kbd className="font-mono text-xs px-1 rounded" style={{ border: '1px solid var(--border-subtle)' }}>Ctrl+K</kbd> 可快速搜索
+        </p>
+      </div>
 
       {/* 搜索表单 */}
       <form onSubmit={handleSearch} className="mb-6">

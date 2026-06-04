@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { CATEGORIES } from '@/lib/categories'
+import { getSeriesCatalog } from '@/lib/series-catalog'
 import prisma from '@/lib/db'
 
 async function getCategoryStats() {
@@ -32,7 +33,11 @@ async function getPopularTags() {
 }
 
 export default async function Sidebar() {
-  const [categoryStats, popularTags] = await Promise.all([getCategoryStats(), getPopularTags()])
+  const [categoryStats, popularTags, seriesList] = await Promise.all([
+    getCategoryStats(),
+    getPopularTags(),
+    getSeriesCatalog(8),
+  ])
 
   return (
     <aside className="space-y-6">
@@ -75,6 +80,37 @@ export default async function Sidebar() {
           })}
         </ul>
       </div>
+
+      {/* 专题 */}
+      {seriesList.length > 0 && (
+        <div
+          className="rounded-xl p-5"
+          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+        >
+          <h3
+            className="text-xs font-semibold uppercase tracking-widest mb-4"
+            style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-sans)' }}
+          >
+            专题
+          </h3>
+          <ul className="space-y-0.5">
+            {seriesList.map((s) => (
+              <li key={`${s.category}-${s.name}`}>
+                <Link
+                  href={s.href}
+                  className="flex items-center justify-between px-2 py-1.5 rounded-md text-sm transition-colors hover:bg-[var(--bg-surface)]"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <span className="truncate mr-2">{s.name}</span>
+                  <span className="text-xs tabular-nums shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                    {s.postCount}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* 热门标签 */}
       {popularTags.length > 0 && (

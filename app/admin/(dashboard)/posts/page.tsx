@@ -120,7 +120,7 @@ export default function PostsPage() {
           <table className="w-full">
             <thead>
               <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)' }}>
-                {['标题', '分类', '状态', '更新时间', '操作'].map((h) => (
+                {['标题', '分类', '专题', '状态', '更新时间', '操作'].map((h) => (
                   <th
                     key={h}
                     className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
@@ -159,6 +159,15 @@ export default function PostsPage() {
                     <Badge variant="category" categoryId={post.category}>
                       {CATEGORIES.find((c) => c.id === post.category)?.name ?? post.category}
                     </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    {post.series?.trim() ? (
+                      <span title={post.seriesOrder != null ? `顺序 ${post.seriesOrder}` : undefined}>
+                        {post.series}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="status">{post.status}</Badge>

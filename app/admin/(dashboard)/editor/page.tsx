@@ -4,8 +4,9 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Save, Sparkles, Loader2, Tag, RotateCcw } from 'lucide-react'
 import { CATEGORIES } from '@/lib/categories'
-import { generateSlug, calculateReadingTime } from '@/lib/utils'
+import { generateSlug, computePostStats, formatWordCount } from '@/lib/utils'
 import MonacoEditor from '@/components/editor/MonacoEditor'
+import EditorSeriesFields from '@/components/editor/EditorSeriesFields'
 
 const DEFAULT_CONTENT = `# 笔记标题
 
@@ -25,6 +26,8 @@ export default function NewEditorPage() {
   const [content, setContent] = useState(DEFAULT_CONTENT)
   const [category, setCategory] = useState('others')
   const [subcategory, setSubcategory] = useState('')
+  const [series, setSeries] = useState('')
+  const [seriesOrder, setSeriesOrder] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [summary, setSummary] = useState('')
@@ -96,6 +99,8 @@ export default function NewEditorPage() {
         content,
         category,
         subcategory: subcategory || undefined,
+        series: series.trim() || undefined,
+        seriesOrder: series.trim() && seriesOrder ? parseInt(seriesOrder, 10) : undefined,
         tags,
         status,
         summary: summary || undefined,
@@ -111,7 +116,7 @@ export default function NewEditorPage() {
     setSaving(false)
   }
 
-  const readingTime = calculateReadingTime(content)
+  const { readingTime, wordCount } = computePostStats(content)
 
   return (
     <div className="flex flex-col h-screen">
@@ -126,6 +131,7 @@ export default function NewEditorPage() {
         <div className="flex-1" />
 
         <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          {formatWordCount(wordCount) && `${formatWordCount(wordCount)} · `}
           约 {readingTime} 分钟阅读
         </span>
 
@@ -225,6 +231,13 @@ export default function NewEditorPage() {
                 placeholder="可选"
               />
             </div>
+
+            <EditorSeriesFields
+              series={series}
+              seriesOrder={seriesOrder}
+              onSeriesChange={setSeries}
+              onSeriesOrderChange={setSeriesOrder}
+            />
 
             {/* 摘要 */}
             <div>

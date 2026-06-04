@@ -126,8 +126,8 @@ export default function SettingsPage() {
           </div>
 
           <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
-            将 content/ 目录下的 Markdown 文件（尚未入库的）同步到数据库。
-            本地 rsync 同步后点击此按钮可快速更新。
+            以 content/ 为内容源：新文件会入库；已绑定 filePath 的笔记在文件更新后会覆盖数据库正文。
+            仅在后台创建、未绑定文件的记录不会被覆盖。本地 rsync 后点此同步即可。
           </p>
         </div>
       </section>

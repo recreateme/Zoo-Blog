@@ -3,6 +3,7 @@ import { Metadata } from 'next'
 import prisma from '@/lib/db'
 import { parseTags } from '@/lib/utils'
 import PostCard from '@/components/post/PostCard'
+import HomeSeries from '@/components/home/HomeSeries'
 import Sidebar from '@/components/layout/Sidebar'
 import type { PostMeta } from '@/types'
 
@@ -24,6 +25,8 @@ async function getPosts(): Promise<PostMeta[]> {
       summary: true,
       category: true,
       subcategory: true,
+      series: true,
+      wordCount: true,
       tags: true,
       status: true,
       readingTime: true,
@@ -78,7 +81,9 @@ export default async function HomePage() {
               <p style={{ color: 'var(--text-secondary)' }}>还没有笔记，去后台创建第一篇吧</p>
             </div>
           ) : (
-            Object.entries(grouped).map(([monthKey, monthPosts]) => (
+            <>
+            <HomeSeries />
+            {Object.entries(grouped).map(([monthKey, monthPosts]) => (
               <section key={monthKey} className="mb-10 animate-fade-in">
                 {/* 月份标题 */}
                 <div className="flex items-center gap-3 mb-5">
@@ -103,7 +108,8 @@ export default async function HomePage() {
                   ))}
                 </div>
               </section>
-            ))
+            ))}
+            </>
           )}
         </div>
 

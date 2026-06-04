@@ -34,12 +34,32 @@ export function formatDateRelative(date: Date | string | null): string {
 // ============================================================
 // 阅读时长计算
 // ============================================================
+/** 估算正文字数（中文按字、英文按词，与 JavaGuide 等文档站口径接近） */
+export function calculateWordCount(content: string): number {
+  const body = content.replace(/^---[\s\S]*?---\n?/, '').trim()
+  const chineseChars = (body.match(/[\u4e00-\u9fa5]/g) || []).length
+  const englishWords = (body.replace(/[\u4e00-\u9fa5]/g, '').match(/\b\w+\b/g) || []).length
+  return chineseChars + englishWords
+}
+
+export function formatWordCount(count: number | null | undefined): string {
+  if (count == null || count <= 0) return ''
+  return count >= 10000 ? `约 ${(count / 10000).toFixed(1)} 万字` : `约 ${count.toLocaleString('zh-CN')} 字`
+}
+
 export function calculateReadingTime(content: string): number {
   const chineseChars = (content.match(/[\u4e00-\u9fa5]/g) || []).length
   const englishWords = (content.replace(/[\u4e00-\u9fa5]/g, '').match(/\b\w+\b/g) || []).length
   // 中文 300字/分钟，英文 200词/分钟
   const minutes = chineseChars / 300 + englishWords / 200
   return Math.max(1, Math.ceil(minutes))
+}
+
+export function computePostStats(content: string) {
+  return {
+    readingTime: calculateReadingTime(content),
+    wordCount: calculateWordCount(content),
+  }
 }
 
 // ============================================================

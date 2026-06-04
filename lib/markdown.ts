@@ -10,7 +10,7 @@ import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 import rehypeStringify from 'rehype-stringify'
 import matter from 'gray-matter'
 import { type TocItem, type ParsedMarkdown, type MarkdownFrontmatter } from '@/types'
-import { calculateReadingTime } from './utils'
+import { computePostStats } from './utils'
 
 // ============================================================
 // Markdown → HTML 转换
@@ -106,11 +106,25 @@ export function parseFrontmatter(raw: string): {
 // ============================================================
 export function extractPostMeta(raw: string, filePath: string) {
   const { frontmatter, content } = parseFrontmatter(raw)
-  const readingTime = calculateReadingTime(content)
+  const { readingTime, wordCount } = computePostStats(content)
+
+  const series =
+    typeof frontmatter.series === 'string' && frontmatter.series.trim()
+      ? frontmatter.series.trim()
+      : null
+  const rawOrder = frontmatter.seriesOrder ?? frontmatter.order
+  const seriesOrder =
+    typeof rawOrder === 'number' && Number.isFinite(rawOrder) ? Math.floor(rawOrder) : null
 
   // slug 优先从 frontmatter 取，其次从文件名
   const filename = filePath.split('/').pop()?.replace(/\.md$/, '') ?? 'untitled'
   const id = typeof frontmatter.slug === 'string' ? frontmatter.slug : filename
+
+  const outline = Array.isArray(frontmatter.outline)
+    ? frontmatter.outline.filter(
+        (x): x is string => typeof x === 'string' && x.trim().length > 0
+      )
+    : []
 
   return {
     id,
@@ -120,7 +134,11 @@ export function extractPostMeta(raw: string, filePath: string) {
     tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
     status: (frontmatter.status === 'published' ? 'PUBLISHED' : 'DRAFT') as 'DRAFT' | 'PUBLISHED',
     summary: frontmatter.summary ?? null,
+    outline,
+    series,
+    seriesOrder,
     readingTime,
+    wordCount,
     filePath,
     publishedAt: frontmatter.publishedAt ? new Date(frontmatter.publishedAt) : null,
   }

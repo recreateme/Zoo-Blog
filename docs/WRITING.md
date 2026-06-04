@@ -24,6 +24,8 @@
 title: 文章标题（必填）
 category: ai              # 分类 ID（必填，见下方分类表）
 subcategory: 基础理论      # 子分类（可选）
+series: TCP 传输层         # 专题/系列名（可选，同系列可设 order 排序）
+order: 1                  # 专题内顺序，越小越靠前（也可用 seriesOrder）
 tags:                     # 标签列表（可选，也可 AI 生成）
   - llm
   - transformer
@@ -33,6 +35,9 @@ publishedAt: 2024-01-15   # 发布日期（可选）
 summary: |                # 摘要（可选，也可 AI 生成）
   这里写一段 100~200 字的摘要，
   会显示在文章列表和 SEO 描述中。
+outline:                  # 文首要点（可选）
+  - 第一个问题或章节目标
+  - 第二个要点
 ---
 
 # 正文从这里开始
@@ -49,6 +54,7 @@ summary: |                # 摘要（可选，也可 AI 生成）
 | `status` | enum | ❌ | `draft` 或 `published`，默认草稿 |
 | `publishedAt` | date | ❌ | 发布日期，格式 `YYYY-MM-DD` |
 | `summary` | string | ❌ | 摘要，不填时可在后台用 AI 生成 |
+| `outline` | string[] | ❌ | 文首「本文要点」列表，见下方示例 |
 
 ---
 

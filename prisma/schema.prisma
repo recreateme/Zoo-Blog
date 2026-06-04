@@ -12,8 +12,12 @@ model Post {
   title       String
   content     String                         // Markdown 原文
   summary     String?                        // AI 生成摘要
+  outline     String     @default("[]")      // JSON 字符串数组，文首要点
   category    String
   subcategory String?
+  series      String?                        // 专题/系列名，同系列内可排序
+  seriesOrder Int?                           // 系列内顺序，越小越靠前
+  wordCount   Int?                           // 正文字数（中英混合估算）
   tags        String     @default("[]")      // JSON 字符串数组
   status      String     @default("DRAFT")   // DRAFT | PUBLISHED
   readingTime Int?                           // 分钟
@@ -29,6 +33,7 @@ model Post {
   pageViews   PageView[]
 
   @@index([category])
+  @@index([category, series])
   @@index([status])
   @@index([publishedAt])
 }
