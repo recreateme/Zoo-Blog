@@ -93,19 +93,37 @@ export default async function Sidebar() {
           >
             专题
           </h3>
-          <ul className="space-y-0.5">
+          <ul className="space-y-3">
             {seriesList.map((s) => (
               <li key={`${s.category}-${s.name}`}>
                 <Link
                   href={s.href}
-                  className="flex items-center justify-between px-2 py-1.5 rounded-md text-sm transition-colors hover:bg-[var(--bg-surface)]"
-                  style={{ color: 'var(--text-secondary)' }}
+                  className="flex items-center justify-between px-2 py-1 rounded-md text-sm font-medium transition-colors hover:bg-[var(--bg-surface)]"
+                  style={{ color: 'var(--text-primary)' }}
                 >
                   <span className="truncate mr-2">{s.name}</span>
                   <span className="text-xs tabular-nums shrink-0" style={{ color: 'var(--text-tertiary)' }}>
                     {s.postCount}
                   </span>
                 </Link>
+                {s.chapters.length > 0 && (
+                  <ul className="mt-1 ml-2 pl-2 space-y-0.5" style={{ borderLeft: '2px solid var(--border-subtle)' }}>
+                    {s.chapters.map((ch) => (
+                      <li key={ch.title}>
+                        <Link
+                          href={ch.href}
+                          className="flex items-center justify-between px-2 py-1 rounded-md text-xs transition-colors hover:bg-[var(--bg-surface)]"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          <span className="truncate mr-2">{ch.title}</span>
+                          <span className="tabular-nums shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                            {ch.postCount}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

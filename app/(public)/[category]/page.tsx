@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import prisma from '@/lib/db'
 import { parseTags } from '@/lib/utils'
 import { getCategoryById, CATEGORIES } from '@/lib/categories'
-import { groupPostsForCategory } from '@/lib/category-groups'
+import { groupPostsForCategory, getOutlineAnchors } from '@/lib/category-groups'
 import CategoryOutline from '@/components/post/CategoryOutline'
 import Sidebar from '@/components/layout/Sidebar'
 import type { PostMeta } from '@/types'
@@ -49,6 +49,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
 
   const posts = await getCategoryPosts(params.category)
   const groups = groupPostsForCategory(posts)
+  const anchors = getOutlineAnchors(groups)
   const seriesCount = groups.filter((g) => g.type === 'series').length
 
   return (
@@ -73,19 +74,20 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               共 {posts.length} 篇笔记
               {seriesCount > 0 && ` · ${seriesCount} 个专题`}
             </p>
-            {groups.length > 1 && (
+            {anchors.length > 1 && (
               <nav className="mt-4 flex flex-wrap gap-2" aria-label="大纲跳转">
-                {groups.map((g) => (
+                {anchors.map((a) => (
                   <a
-                    key={g.id}
-                    href={`#${g.id}`}
+                    key={a.id}
+                    href={`#${a.id}`}
                     className="text-xs px-2.5 py-1 rounded-full transition-colors hover:bg-[var(--bg-surface)]"
                     style={{
                       color: 'var(--text-secondary)',
                       border: '1px solid var(--border-subtle)',
+                      marginLeft: a.indent ? '0.5rem' : undefined,
                     }}
                   >
-                    {g.title}
+                    {a.indent ? `└ ${a.label}` : a.label}
                   </a>
                 ))}
               </nav>

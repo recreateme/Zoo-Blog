@@ -164,6 +164,7 @@ export default async function PostPage({ params }: PostPageProps) {
           <article className="flex-1 min-w-0">
             <Breadcrumbs
               categoryId={post.category}
+              series={post.series}
               subcategory={post.subcategory}
               currentTitle={post.title}
             />

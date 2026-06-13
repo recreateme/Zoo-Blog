@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { parseTags, stringifyTags, computePostStats } from '@/lib/utils'
+import { indexPostById, removePostFromIndex } from '@/lib/search-index'
 import { z } from 'zod'
 
 const UpdatePostSchema = z.object({
@@ -79,6 +80,12 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
       },
     })
 
+    try {
+      await indexPostById(updated.id)
+    } catch {
+      /* ignore */
+    }
+
     return NextResponse.json({ success: true, post: { ...updated, tags: parseTags(updated.tags) } })
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -96,6 +103,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { slug: str
 
   try {
     await prisma.post.delete({ where: { id: params.slug } })
+    try {
+      await removePostFromIndex(params.slug)
+    } catch {
+      /* ignore */
+    }
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: '删除失败' }, { status: 500 })

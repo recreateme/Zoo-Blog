@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { parseTags, stringifyTags, computePostStats } from '@/lib/utils'
+import { indexPostById } from '@/lib/search-index'
 import { z } from 'zod'
 
 const CreatePostSchema = z.object({
@@ -96,6 +97,12 @@ export async function POST(req: NextRequest) {
         publishedAt,
       },
     })
+
+    try {
+      await indexPostById(post.id)
+    } catch {
+      /* ignore */
+    }
 
     return NextResponse.json({ success: true, post })
   } catch (error) {

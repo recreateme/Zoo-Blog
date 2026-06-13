@@ -155,19 +155,16 @@ S3_BUCKET="knowledge-blog"
 
 ## 搜索（Phase 2）
 
-Phase 1 默认使用 Fuse.js（纯前端搜索，无需配置）。
+Phase 1 默认使用 SQLite `contains` 模糊搜索。
 
-升级到 Meilisearch：
+接入 Meilisearch（推荐）：
 
 ```bash
 MEILISEARCH_HOST="http://localhost:7700"
-MEILISEARCH_API_KEY="your-meilisearch-master-key"
+MEILISEARCH_API_KEY="local-dev-master-key-16b"   # 与 docker-compose 中 MEILI_MASTER_KEY 一致
 ```
 
-启动 Meilisearch：
-```bash
-docker compose up -d meilisearch
-```
+启动 Meilisearch 后，在后台「设置 → 从文件系统同步」会重建搜索索引。后台编辑/删除文章也会自动更新索引。未配置时自动回退 SQLite。
 
 ---
 

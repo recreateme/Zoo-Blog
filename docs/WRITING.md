@@ -23,9 +23,9 @@
 ---
 title: 文章标题（必填）
 category: ai              # 分类 ID（必填，见下方分类表）
-subcategory: 基础理论      # 子分类（可选）
-series: TCP 传输层         # 专题/系列名（可选，同系列可设 order 排序）
-order: 1                  # 专题内顺序，越小越靠前（也可用 seriesOrder）
+subcategory: 第3章 图像滤波   # 章节名（教程内可选；无 series 时作普通子分类）
+series: OpenCV 入门教程       # 教程/系列名（可选）
+order: 12                     # 教程内全局顺序（也可用 seriesOrder），越小越靠前
 tags:                     # 标签列表（可选，也可 AI 生成）
   - llm
   - transformer
@@ -49,7 +49,9 @@ outline:                  # 文首要点（可选）
 |------|------|------|------|
 | `title` | string | ✅ | 文章标题，显示在列表和详情页 |
 | `category` | string | ✅ | 分类 ID，见下方分类表 |
-| `subcategory` | string | ❌ | 子分类，自由定义 |
+| `subcategory` | string | ❌ | 子分类；在教程（`series`）下表示**章节名** |
+| `series` | string | ❌ | 教程/系列名，同分类下多篇可组成系列阅读 |
+| `order` / `seriesOrder` | number | ❌ | 教程内阅读顺序（全书编号，如 1～50） |
 | `tags` | string[] | ❌ | 标签数组，建议 3~6 个 |
 | `status` | enum | ❌ | `draft` 或 `published`，默认草稿 |
 | `publishedAt` | date | ❌ | 发布日期，格式 `YYYY-MM-DD` |
@@ -194,7 +196,32 @@ ORDER BY published_at DESC;
 | `life` | 生活笔记 | 读书、随想、日常 |
 | `others` | 其他 | 不便归类的内容 |
 
-### 标签规范建议
+### 教程与章节（系列阅读）
+
+适合「一本书」式内容（如 OpenCV 10 章 × 每章 5 篇）：
+
+```yaml
+category: computer-vision
+series: OpenCV 入门教程      # 教程名 → 面包屑、分类页、侧栏一级
+subcategory: 第3章 图像滤波   # 章节名 → 分类页/侧栏二级嵌套
+order: 12                     # 全书顺序，上一篇/下一篇、目录序号均按此排序
+```
+
+**展示效果：**
+
+- 面包屑：`首页 > 计算机视觉 > OpenCV 入门教程 > 第3章 图像滤波 > 文章标题`
+- 分类页：教程块下按章节折叠列出文章
+- 侧栏「专题」：教程下缩进显示各章节链接
+- 文章页：教程目录按章节分组，非 50 条平铺
+
+**约定：**
+
+- 有 `series` 时，`subcategory` 表示**章节**；无 `series` 时仍为普通子分类
+- 同一教程内 `series` 字符串须完全一致（含空格、标点）
+- 未标 `subcategory` 的教程文章会归入「未分章节」
+- `order` 与 `seriesOrder` 等价，同步时都会写入数据库
+
+---
 
 - 使用**小写字母**和**连字符**：`deep-learning`，不用 `DeepLearning`
 - 尽量**具体**：`ospf-protocol` 优于 `network`

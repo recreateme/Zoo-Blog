@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { BookMarked, FolderOpen, Files } from 'lucide-react'
-import type { OutlineGroup } from '@/lib/category-groups'
+import type { ChapterOutline, OutlineGroup } from '@/lib/category-groups'
+import { countPostsInGroup } from '@/lib/category-groups'
 import { formatDate, formatWordCount } from '@/lib/utils'
 import type { PostMeta } from '@/types'
 
@@ -11,7 +12,7 @@ const GROUP_ICON = {
 } as const
 
 const GROUP_LABEL = {
-  series: '专题',
+  series: '教程',
   subcategory: '子分类',
   other: '其他',
 } as const
@@ -55,11 +56,42 @@ function PostRow({ post, index }: { post: PostMeta; index?: number }) {
   )
 }
 
+function ChapterSection({ chapter }: { chapter: ChapterOutline }) {
+  return (
+    <div
+      id={chapter.id}
+      className="scroll-mt-24"
+      style={{ borderTop: '1px solid var(--border-subtle)' }}
+    >
+      <div
+        className="flex items-center gap-2 px-5 py-2.5"
+        style={{ background: 'color-mix(in srgb, var(--bg-surface) 80%, transparent)' }}
+      >
+        <FolderOpen size={14} style={{ color: 'var(--accent)' }} />
+        <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+          {chapter.title}
+        </h3>
+        <span className="ml-auto text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          {chapter.posts.length} 篇
+        </span>
+      </div>
+      <ul className="py-1 pl-2">
+        {chapter.posts.map((post, i) => (
+          <PostRow key={post.id} post={post} index={post.seriesOrder ?? i + 1} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export default function CategoryOutline({ groups }: CategoryOutlineProps) {
   return (
     <div className="space-y-8">
       {groups.map((group) => {
         const Icon = GROUP_ICON[group.type]
+        const total = countPostsInGroup(group)
+        const hasChapters = (group.chapters?.length ?? 0) > 0
+
         return (
           <section
             key={group.id}
@@ -69,7 +101,7 @@ export default function CategoryOutline({ groups }: CategoryOutlineProps) {
           >
             <div
               className="flex items-center gap-2 px-5 py-3"
-              style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}
+              style={{ borderBottom: hasChapters ? 'none' : '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}
             >
               <Icon size={16} style={{ color: 'var(--accent)' }} />
               <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
@@ -79,18 +111,40 @@ export default function CategoryOutline({ groups }: CategoryOutlineProps) {
                 {group.title}
               </h2>
               <span className="ml-auto text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {group.posts.length} 篇
+                {total} 篇
+                {hasChapters && ` · ${group.chapters!.length} 章`}
               </span>
             </div>
-            <ul className="py-1">
-              {group.posts.map((post, i) => (
-                <PostRow
-                  key={post.id}
-                  post={post}
-                  index={group.type === 'series' ? (post.seriesOrder ?? i + 1) : undefined}
-                />
-              ))}
-            </ul>
+
+            {hasChapters ? (
+              <div>
+                {group.chapters!.map((chapter) => (
+                  <ChapterSection key={chapter.id} chapter={chapter} />
+                ))}
+                {group.loosePosts && group.loosePosts.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                    <div className="px-5 py-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      未分章节
+                    </div>
+                    <ul className="py-1">
+                      {group.loosePosts.map((post, i) => (
+                        <PostRow key={post.id} post={post} index={post.seriesOrder ?? i + 1} />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <ul className="py-1">
+                {group.posts.map((post, i) => (
+                  <PostRow
+                    key={post.id}
+                    post={post}
+                    index={group.type === 'series' ? (post.seriesOrder ?? i + 1) : undefined}
+                  />
+                ))}
+              </ul>
+            )}
           </section>
         )
       })}

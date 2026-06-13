@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { getCategoryById } from '@/lib/categories'
+import { seriesGroupId, chapterGroupId } from '@/lib/category-groups'
 
 export interface BreadcrumbItem {
   label: string
@@ -9,28 +10,44 @@ export interface BreadcrumbItem {
 
 interface BreadcrumbsProps {
   categoryId?: string
+  series?: string | null
   subcategory?: string | null
   currentTitle: string
 }
 
 export default function Breadcrumbs({
   categoryId,
+  series,
   subcategory,
   currentTitle,
 }: BreadcrumbsProps) {
   const category = categoryId ? getCategoryById(categoryId) : undefined
-  const items: BreadcrumbItem[] = [
-    { label: '首页', href: '/' },
-  ]
+  const seriesName = series?.trim() || null
+  const chapterName = subcategory?.trim() || null
 
-  if (category) {
+  const items: BreadcrumbItem[] = [{ label: '首页', href: '/' }]
+
+  if (category && categoryId) {
     items.push({ label: category.name, href: `/${category.id}` })
   } else if (categoryId) {
     items.push({ label: categoryId, href: `/${categoryId}` })
   }
 
-  if (subcategory?.trim()) {
-    items.push({ label: subcategory.trim() })
+  if (seriesName && categoryId) {
+    items.push({
+      label: seriesName,
+      href: `/${categoryId}#${seriesGroupId(seriesName)}`,
+    })
+  }
+
+  if (chapterName && categoryId) {
+    items.push({
+      label: chapterName,
+      href:
+        seriesName
+          ? `/${categoryId}#${chapterGroupId(seriesName, chapterName)}`
+          : undefined,
+    })
   }
 
   items.push({ label: currentTitle })
@@ -53,14 +70,14 @@ export default function Breadcrumbs({
               {item.href && !isLast ? (
                 <Link
                   href={item.href}
-                  className="hover:text-[var(--accent)] transition-colors truncate max-w-[12rem] sm:max-w-none"
+                  className="hover:text-[var(--accent)] transition-colors truncate max-w-[10rem] sm:max-w-[14rem]"
                   style={{ color: 'var(--text-tertiary)' }}
                 >
                   {item.label}
                 </Link>
               ) : (
                 <span
-                  className={isLast ? 'truncate font-medium' : 'truncate max-w-[10rem] sm:max-w-none'}
+                  className={isLast ? 'truncate font-medium' : 'truncate max-w-[10rem] sm:max-w-[14rem]'}
                   style={{ color: isLast ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}
                   aria-current={isLast ? 'page' : undefined}
                 >

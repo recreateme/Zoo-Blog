@@ -1,12 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, RefreshCw, CheckCircle, AlertCircle, Database, FolderSync, Bot } from 'lucide-react'
+import { Loader2, RefreshCw, CheckCircle, AlertCircle, Database, FolderSync, Bot, Search } from 'lucide-react'
 
 interface SyncStatus {
   contentFileCount: number
   dbPostCount: number
+  fileBoundCount: number
+  orphanCount: number
   contentDir: string
+  search?: {
+    enabled: boolean
+    documentCount: number | null
+  }
 }
 
 export default function SettingsPage() {
@@ -57,7 +63,7 @@ export default function SettingsPage() {
         系统设置
       </h1>
       <p className="text-sm mb-8" style={{ color: 'var(--text-tertiary)' }}>
-        内容同步、环境配置与系统信息
+        内容同步、搜索索引与环境配置
       </p>
 
       {/* 内容同步 */}
@@ -76,15 +82,9 @@ export default function SettingsPage() {
               <Loader2 size={14} className="animate-spin" /> 加载中...
             </div>
           ) : syncStatus ? (
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               <div>
-                <p className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>内容目录</p>
-                <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
-                  {syncStatus.contentDir}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>MD 文件数</p>
+                <p className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>MD 文件</p>
                 <p className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
                   {syncStatus.contentFileCount}
                 </p>
@@ -93,6 +93,21 @@ export default function SettingsPage() {
                 <p className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>数据库记录</p>
                 <p className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
                   {syncStatus.dbPostCount}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>文件绑定</p>
+                <p className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {syncStatus.fileBoundCount}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>待清理孤儿</p>
+                <p
+                  className="text-2xl font-semibold"
+                  style={{ color: syncStatus.orphanCount > 0 ? '#dc2626' : 'var(--text-primary)' }}
+                >
+                  {syncStatus.orphanCount}
                 </p>
               </div>
             </div>
@@ -125,10 +140,55 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
-            以 content/ 为内容源：新文件会入库；已绑定 filePath 的笔记在文件更新后会覆盖数据库正文。
-            仅在后台创建、未绑定文件的记录不会被覆盖。本地 rsync 后点此同步即可。
-          </p>
+          <div className="mt-4 space-y-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="font-medium" style={{ color: 'var(--text-secondary)' }}>同步策略（文件优先）</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>新 MD 文件 → 入库并绑定 filePath</li>
+              <li>已绑定 filePath 的笔记 → 文件更新后覆盖数据库</li>
+              <li>本地删除 MD 或 rsync --delete → 同步时删除对应 DB 记录</li>
+              <li>同文件修改 slug → 删除旧 slug 记录，以新 slug 入库</li>
+              <li>仅在后台创建、无 filePath 的记录 → 永不覆盖或删除</li>
+              <li>同步完成后自动更新 Meilisearch 索引（如已配置）</li>
+            </ul>
+            <p className="pt-1">
+              目录：<span className="font-mono">{syncStatus?.contentDir ?? './content'}</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 搜索索引 */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Search size={16} style={{ color: 'var(--accent)' }} />
+          <h2 className="font-medium" style={{ color: 'var(--text-primary)' }}>全文搜索</h2>
+        </div>
+        <div
+          className="rounded-xl p-5"
+          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium mb-0.5" style={{ color: 'var(--text-primary)' }}>
+                Meilisearch
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                {syncStatus?.search?.enabled
+                  ? `已连接 · 索引文档 ${syncStatus.search.documentCount ?? '—'} 篇`
+                  : '未配置 MEILISEARCH_HOST / MEILISEARCH_API_KEY，当前使用 SQLite 模糊搜索'}
+              </p>
+            </div>
+            <span
+              className="badge"
+              style={{
+                background: syncStatus?.search?.enabled ? '#f0fdf4' : 'var(--bg-surface)',
+                color: syncStatus?.search?.enabled ? '#16a34a' : 'var(--text-tertiary)',
+                border: `1px solid ${syncStatus?.search?.enabled ? '#bbf7d0' : 'var(--border-subtle)'}`,
+              }}
+            >
+              {syncStatus?.search?.enabled ? '已启用' : 'SQLite 回退'}
+            </span>
+          </div>
         </div>
       </section>
 
@@ -210,11 +270,11 @@ export default function SettingsPage() {
           <p className="text-sm mb-3" style={{ color: 'var(--text-primary)' }}>
             cp .sync.env.example .sync.env && nano .sync.env
           </p>
-          <p className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}># 手动同步本地笔记到 VPS</p>
+          <p className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}># 手动同步本地笔记到 VPS（含 --delete）</p>
           <p className="text-sm mb-3" style={{ color: 'var(--text-primary)' }}>
             ./scripts/sync-local.sh
           </p>
-          <p className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}># 每 30 秒自动同步（开发时使用）</p>
+          <p className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}># 同步后在后台「从文件系统同步」或等待自动触发</p>
           <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
             watch -n 30 ./scripts/sync-local.sh
           </p>
