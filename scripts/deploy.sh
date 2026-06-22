@@ -78,7 +78,7 @@ npm run build
 
 # ─── 启动 Docker 服务 ─────────────────────────────────────
 echo "🐳 启动搜索和向量数据库服务..."
-docker compose up -d meilisearch qdrant
+docker compose --profile rag up -d meilisearch qdrant
 
 # ─── PM2 启动应用 ─────────────────────────────────────────
 echo "🟢 启动应用..."

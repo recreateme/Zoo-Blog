@@ -69,11 +69,7 @@ export default function SeriesNav({ seriesName, currentId, posts }: SeriesNavPro
   }
 
   return (
-    <nav
-      className="rounded-xl p-4 mb-8"
-      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-      aria-label={`教程：${seriesName}`}
-    >
+    <nav className="series-nav" aria-label={`教程：${seriesName}`}>
       <div className="flex items-center gap-2 mb-3">
         <BookMarked size={14} style={{ color: 'var(--accent)' }} />
         <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>

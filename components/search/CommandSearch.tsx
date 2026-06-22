@@ -6,13 +6,15 @@ import { useRouter } from 'next/navigation'
 import { Search, X, Loader2, FileText } from 'lucide-react'
 import { getCategoryName } from '@/lib/categories'
 import { cn } from '@/lib/utils'
-import type { PostMeta } from '@/types'
+import type { SearchPostMeta } from '@/lib/search-index'
+import { SearchHighlightText } from '@/components/search/SearchHighlightText'
+import { OPEN_COMMAND_SEARCH_EVENT } from '@/lib/search-events'
 
 export default function CommandSearch() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<PostMeta[]>([])
+  const [results, setResults] = useState<SearchPostMeta[]>([])
   const [loading, setLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -22,6 +24,12 @@ export default function CommandSearch() {
     setQuery('')
     setResults([])
     setActiveIndex(0)
+  }, [])
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true)
+    window.addEventListener(OPEN_COMMAND_SEARCH_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_COMMAND_SEARCH_EVENT, onOpen)
   }, [])
 
   useEffect(() => {
@@ -92,24 +100,13 @@ export default function CommandSearch() {
     >
       <button
         type="button"
-        className="absolute inset-0"
-        style={{ background: 'rgba(0,0,0,0.45)' }}
+        className="absolute inset-0 cmd-overlay-backdrop"
         onClick={close}
         aria-label="关闭搜索"
       />
 
-      <div
-        className="relative w-full max-w-xl rounded-xl overflow-hidden shadow-lg"
-        style={{
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-default)',
-          boxShadow: 'var(--shadow-lg)',
-        }}
-      >
-        <div
-          className="flex items-center gap-2 px-4 py-3"
-          style={{ borderBottom: '1px solid var(--border-subtle)' }}
-        >
+      <div className="cmd-dialog">
+        <div className="cmd-input-row">
           <Search size={18} style={{ color: 'var(--text-tertiary)' }} />
           <input
             ref={inputRef}
@@ -117,8 +114,7 @@ export default function CommandSearch() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索笔记标题、摘要、正文…"
-            className="flex-1 bg-transparent text-sm outline-none"
-            style={{ color: 'var(--text-primary)' }}
+            className="cmd-input"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && query.trim() && results.length === 0) {
                 close()
@@ -126,22 +122,13 @@ export default function CommandSearch() {
               }
             }}
           />
-          <kbd
-            className="hidden sm:inline text-xs px-1.5 py-0.5 rounded"
-            style={{
-              background: 'var(--bg-surface)',
-              color: 'var(--text-tertiary)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            Esc
-          </kbd>
+          <kbd className="kbd-hint hidden sm:inline">Esc</kbd>
           <button type="button" onClick={close} className="btn btn-ghost p-1.5" aria-label="关闭">
             <X size={16} />
           </button>
         </div>
 
-        <div className="max-h-[50vh] overflow-y-auto">
+        <div className="cmd-results">
           {loading && (
             <div
               className="flex items-center justify-center gap-2 py-10 text-sm"
@@ -178,41 +165,46 @@ export default function CommandSearch() {
                 onClick={close}
                 onMouseEnter={() => setActiveIndex(i)}
                 className={cn(
-                  'flex gap-3 px-4 py-3 transition-colors',
-                  i === activeIndex && 'bg-[var(--bg-surface)]'
+                  'cmd-result-item',
+                  `badge-cat-${post.category}`,
+                  i === activeIndex && 'cmd-result-item-active'
                 )}
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
               >
                 <FileText
                   size={16}
                   className="shrink-0 mt-0.5"
-                  style={{ color: 'var(--accent)' }}
+                  style={{ color: 'var(--cat-fg, var(--accent))' }}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                    {post.title}
+                    <SearchHighlightText
+                      html={post.highlight?.title}
+                      fallback={post.title}
+                    />
                   </p>
                   <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
                     {getCategoryName(post.category)}
                     {post.series ? ` · ${post.series}` : ''}
-                    {!post.series && post.summary ? ` · ${post.summary}` : ''}
+                    {!post.series && (
+                      <>
+                        {post.highlight?.summary ? ' · ' : post.summary ? ' · ' : ''}
+                        <SearchHighlightText
+                          html={post.highlight?.summary}
+                          fallback={post.summary ?? ''}
+                        />
+                      </>
+                    )}
                   </p>
                 </div>
               </Link>
             ))}
         </div>
 
-        <div
-          className="px-4 py-2 text-xs flex justify-between"
-          style={{
-            color: 'var(--text-tertiary)',
-            borderTop: '1px solid var(--border-subtle)',
-            background: 'var(--bg-surface)',
-          }}
-        >
+        <div className="cmd-footer">
           <span>↑↓ 选择 · Enter 打开</span>
-          <span>
-            <kbd className="font-mono">Ctrl</kbd>+<kbd className="font-mono">K</kbd>
+          <span className="flex items-center gap-1">
+            <kbd className="kbd-hint">⌃K</kbd>
+            <span>唤起</span>
           </span>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { CATEGORIES } from '@/lib/categories'
 import { formatDate, parseTags } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
 import Link from 'next/link'
+import { getSiteName } from '@/lib/site'
 
 export const metadata: Metadata = { title: '仪表盘 · 管理后台' }
 
@@ -54,58 +55,36 @@ export default async function DashboardPage() {
 
   const statCards = [
     { label: '全部笔记', value: stats.totalPosts, icon: FileText, color: 'var(--accent)' },
-    { label: '已发布', value: stats.publishedPosts, icon: Send, color: '#16a34a' },
+    { label: '已发布', value: stats.publishedPosts, icon: Send, color: 'var(--status-published-fg)' },
     { label: '草稿', value: stats.draftPosts, icon: FileEdit, color: '#d97706' },
     { label: '总阅读量', value: stats.totalViews, icon: Eye, color: '#7c3aed' },
     { label: '附件数', value: stats.totalAttachments, icon: Paperclip, color: '#0284c7' },
   ]
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl">
-      <div className="mb-8">
-        <h1
-          className="text-2xl mb-1"
-          style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, color: 'var(--text-primary)' }}
-        >
-          仪表盘
-        </h1>
-        <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-          欢迎回来，这是你的知识库概览
-        </p>
-      </div>
+    <div className="admin-page">
+      <header className="admin-page-header">
+        <h1 className="admin-page-title">仪表盘</h1>
+        <p className="admin-page-lead">欢迎回来，这是 {getSiteName()} 概览</p>
+      </header>
 
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+      <div className="admin-stat-grid-5">
         {statCards.map(({ label, value, icon: Icon, color }) => (
-          <div
-            key={label}
-            className="rounded-xl p-5"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-          >
+          <div key={label} className="admin-stat-card">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{label}</p>
+              <p className="admin-stat-label">{label}</p>
               <Icon size={15} style={{ color }} />
             </div>
-            <p className="text-2xl font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>
-              {value.toLocaleString()}
-            </p>
+            <p className="admin-stat-value">{value.toLocaleString()}</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 最近笔记 */}
-        <div
-          className="lg:col-span-2 rounded-xl p-5"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-        >
+        <div className="admin-panel lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>最近笔记</h2>
-            <Link
-              href="/admin/posts"
-              className="text-xs hover:text-[var(--accent)] transition-colors"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
+            <h2 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>最近笔记</h2>
+            <Link href="/admin/posts" className="text-xs text-meta hover:text-[var(--accent)] transition-colors">
               查看全部 →
             </Link>
           </div>
@@ -117,15 +96,10 @@ export default async function DashboardPage() {
                 className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-surface)] transition-colors group"
               >
                 <div className="flex-1 min-w-0">
-                  <p
-                    className="text-sm truncate group-hover:text-[var(--accent)] transition-colors"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
+                  <p className="text-sm truncate group-hover:text-[var(--accent)] transition-colors" style={{ color: 'var(--text-primary)' }}>
                     {post.title}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                    {formatDate(post.updatedAt)}
-                  </p>
+                  <p className="text-xs text-meta mt-0.5">{formatDate(post.updatedAt)}</p>
                 </div>
                 <Badge variant="status">{post.status}</Badge>
               </Link>
@@ -133,12 +107,8 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* 分类占比 */}
-        <div
-          className="rounded-xl p-5"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-        >
-          <h2 className="font-medium text-sm mb-4" style={{ color: 'var(--text-primary)' }}>
+        <div className="admin-panel">
+          <h2 className="text-sm font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
             分类分布
           </h2>
           <div className="space-y-2.5">
@@ -152,12 +122,10 @@ export default async function DashboardPage() {
                 return (
                   <div key={s.category}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      <span className="text-xs flex items-center gap-1.5 text-lead">
                         {cat?.icon} {cat?.name ?? s.category}
                       </span>
-                      <span className="text-xs tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-                        {s._count.id} 篇
-                      </span>
+                      <span className="text-xs tabular-nums text-meta">{s._count.id} 篇</span>
                     </div>
                     <div className="h-1.5 rounded-full" style={{ background: 'var(--bg-surface)' }}>
                       <div
@@ -170,11 +138,7 @@ export default async function DashboardPage() {
               })}
           </div>
 
-          {/* 快速创建 */}
-          <Link
-            href="/admin/editor"
-            className="btn btn-primary w-full justify-center mt-6 text-sm"
-          >
+          <Link href="/admin/editor" className="btn btn-primary w-full justify-center mt-6 text-sm">
             + 新建笔记
           </Link>
         </div>

@@ -10,8 +10,18 @@ import {
   ALLOWED_MIME_TYPES,
   MAX_FILE_SIZE,
 } from '@/services/storage/provider'
+import { applyRateLimit } from '@/lib/rate-limit'
+import type { Prisma } from '@prisma/client'
 
 export async function POST(req: NextRequest) {
+  const rl = applyRateLimit(req, 'api-upload', 30, 60_000)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: '上传过于频繁，请稍后再试' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec ?? 60) } }
+    )
+  }
+
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: '未授权' }, { status: 401 })
 
@@ -56,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     // 上传文件
     const storage = await createStorageProvider()
-    const url = await storage.upload(buffer, storedKey, file.type)
+    const { url, key: storedKeyFinal } = await storage.upload(buffer, storedKey, file.type)
 
     // 获取图片尺寸
     let width: number | null = null
@@ -74,7 +84,7 @@ export async function POST(req: NextRequest) {
     const attachment = await prisma.attachment.create({
       data: {
         originalName: file.name,
-        storedKey,
+        storedKey: storedKeyFinal,
         url,
         type: getAttachmentType(file.type),
         mimeType: file.type,
@@ -108,8 +118,7 @@ export async function GET(req: NextRequest) {
   const page = parseInt(searchParams.get('page') ?? '1')
   const pageSize = 30
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {}
+  const where: Prisma.AttachmentWhereInput = {}
   if (postId) where.postId = postId
   if (type) where.type = type
 

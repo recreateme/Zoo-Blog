@@ -11,6 +11,7 @@ import rehypeStringify from 'rehype-stringify'
 import matter from 'gray-matter'
 import { type TocItem, type ParsedMarkdown, type MarkdownFrontmatter } from '@/types'
 import { computePostStats } from './utils'
+import { createHeadingSlugger, slugifyHeading } from './heading-slug'
 
 // ============================================================
 // Markdown → HTML 转换
@@ -51,15 +52,14 @@ export async function parseMarkdown(raw: string): Promise<ParsedMarkdown> {
 export function extractToc(markdown: string): TocItem[] {
   const headingRegex = /^(#{1,4})\s+(.+)$/gm
   const flat: TocItem[] = []
+  const slugger = createHeadingSlugger()
   let match: RegExpExecArray | null
 
   while ((match = headingRegex.exec(markdown)) !== null) {
     const level = match[1].length
-    const text = match[2].replace(/[*_`]/g, '').trim()
-    const id = text
-      .toLowerCase()
-      .replace(/[\s]+/g, '-')
-      .replace(/[^\w\u4e00-\u9fa5-]/g, '')
+    const raw = match[2].trim()
+    const text = raw.replace(/[*_`]/g, '').trim()
+    const id = slugifyHeading(raw, slugger)
 
     flat.push({ id, text, level, children: [] })
   }

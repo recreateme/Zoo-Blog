@@ -1,6 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
-import { type StorageProvider } from './provider'
+import { type StorageProvider, type UploadResult } from './provider'
+import { processUploadBuffer } from './image-process'
 
 export class LocalStorageProvider implements StorageProvider {
   private uploadDir: string
@@ -11,33 +12,15 @@ export class LocalStorageProvider implements StorageProvider {
     this.publicBase = '/uploads'
   }
 
-  async upload(buffer: Buffer, key: string, mimeType: string): Promise<string> {
+  async upload(buffer: Buffer, key: string, mimeType: string): Promise<UploadResult> {
     await fs.mkdir(this.uploadDir, { recursive: true })
 
-    let finalKey = key
-    let finalBuffer = buffer
-
-    // 图片自动压缩为 WebP
-    if (mimeType.startsWith('image/') && mimeType !== 'image/svg+xml') {
-      try {
-        const sharp = (await import('sharp')).default
-        const ext = path.extname(key)
-        finalKey = key.replace(ext, '.webp')
-        finalBuffer = await sharp(buffer)
-          .webp({ quality: 82 })
-          .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
-          .toBuffer()
-      } catch {
-        // sharp 失败时使用原始文件
-        console.warn('图片压缩失败，使用原始文件')
-      }
-    }
-
+    const { buffer: finalBuffer, key: finalKey } = await processUploadBuffer(buffer, key, mimeType)
     const filePath = path.join(this.uploadDir, finalKey)
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, finalBuffer)
 
-    return this.getUrl(finalKey)
+    return { url: this.getUrl(finalKey), key: finalKey }
   }
 
   async delete(key: string): Promise<void> {
@@ -45,7 +28,7 @@ export class LocalStorageProvider implements StorageProvider {
     try {
       await fs.unlink(filePath)
     } catch {
-      // 文件不存在时忽略
+      /* 文件不存在时忽略 */
     }
   }
 
@@ -72,7 +55,7 @@ export class LocalStorageProvider implements StorageProvider {
         return { width: meta.width, height: meta.height }
       }
     } catch {
-      // ignore
+      /* ignore */
     }
     return null
   }

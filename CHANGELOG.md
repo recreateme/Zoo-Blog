@@ -4,6 +4,228 @@
 
 ---
 
+## [0.4.3] - 2026-06-02
+
+### 首页阅读索引（借鉴 pingfan 结构）
+
+- `HomeDiscovery`：侧栏/移动端搜索入口（接 ⌃K）+ 标签云筛选
+- 压缩 Hero、最近更新条带、`compact` 单栏时间线列表
+- 首页 `/?tag=` 筛选；顶栏「更多」收纳问答/图谱/分类
+- 搜索页标签云 + 列表/卡片视图切换；loading 骨架对齐新布局
+
+### 维护与精简
+
+- 分类页改为 `compact` 列表，与首页时间线样式统一；教程/章节分组结构保留
+- 移除 `content-source` 死代码、精简 `types/index.ts` 未引用接口
+- 卸载冗余依赖：`remark`、`tsparticles`、`@tailwindcss/typography`（正文样式由 `globals.css` 的 `.markdown-body` 承担）
+- 修正 `STORAGE_PROVIDER` 文档（移除未实现的 `oss`）
+- 附件页复用共享 `Attachment` 类型
+
+---
+
+## [0.4.2] - 2026-06-02
+
+### 知识图谱 · 节点筛选
+
+- 分类芯片、专题下拉、「隐藏孤立节点」切换
+- `applyGraphFilters`：笔记链接 / 时间演化 / 标签关联均支持
+- 标签节点附带 `categories` / `seriesList` 元数据用于筛选
+- 统计栏显示筛选后的节点/边数量
+
+---
+
+## [0.4.1] - 2026-06-02
+
+### 知识图谱 · 时间演化视图
+
+- `/graph` 新增「时间演化」：按月累积展示已发布笔记与 `[[双向链接]]`
+- 时间轴滑块 + 播放动画，截至月末快照过滤节点与边
+- `GET /api/graph?view=timeline`；`buildTimelineSteps` / `filterGraphByTimelineStep`
+
+---
+
+## [0.4.0] - 2026-06-02
+
+### 知识图谱（Phase F）
+
+- `/graph` 页面：D3 力导向图，支持「笔记链接」「标签关联」双视图
+- `GET /api/graph`：基于 `PostLink` 与标签共现生成节点/边数据
+- 图谱视觉令牌：`--graph-node-*`、`--graph-edge`；圆角矩形节点（分类色边框）
+- 图谱页粒子全强度（96）；顶栏新增「图谱」导航
+- `graph` 加入保留路径，避免与分类路由冲突
+
+### 待续（0.4.x）
+
+- [x] 知识时间演化视图
+- [x] 节点筛选（分类 / 专题 / 孤立节点）
+
+---
+
+## [0.3.5] - 2026-06-02
+
+### 前端设计（Phase E）
+
+- 后台统一语义类：`.admin-page`、`.admin-panel`、`.admin-toolbar`、`.admin-table-*`
+- 设置页同步/搜索/RAG/数据库区块统一 `admin-panel`；反馈条主题感知
+- Monaco 编辑器随 `data-theme` 切换 `vs` / `vs-dark`
+- `EmptyState` 支持 `compact`，用于笔记列表与附件空状态
+- `AdminSidebar` 导航语义化，Logo 与前台 `ScrollText` 一致
+
+---
+
+## [0.3.4] - 2026-06-02
+
+### 前端设计（Phase D）
+
+- 阅读页信息层级：分类 → 标题 → 系列导航 → 摘要 → 元数据
+- 侧边 TOC 当前章节 `accent` 左边框高亮（替代仅字色变化）
+- 相关笔记改为分类色左边框紧凑卡片（`RelatedPosts`）
+- 正文 `max-width: 68ch`；代码块保持横向滚动溢出
+- `ArticleOutline`、`PostNav`、`MobileToc` 语义化样式收敛
+
+---
+
+## [0.3.3] - 2026-06-02
+
+### 前端设计（Phase C）
+
+- `/search`：目录检索布局、宽搜索框、分类 `badge-category` 筛选、`EmptyState` 空结果
+- `/ask`：批注式对话；助手回答衬线排版；来源改为分类色左边框脚注卡片
+- `⌃K` 命令搜索：结果项分类色左边框、键盘焦点高亮、`kbd-hint` 统一快捷键样式
+- 新增语义 CSS 类：`.search-*`、`.ask-*`、`.cmd-*`
+
+---
+
+## [0.3.2] - 2026-06-02
+
+### 品牌化
+
+- 站点默认名称改为 **PLAIN MLOG**；首页导航「时间线」改为「所有内容」
+- 集中配置：`lib/site.ts`
+
+### 前端设计（Phase A + B）
+
+- 语义 CSS 类（`text-display`、`surface-panel`、`timeline-month` 等）
+- 分类 Badge 主题感知色；卡片 hover 去掉上浮动画
+- 首页 Hero：统计面板 +「搜索笔记」「向笔记提问」双 CTA
+- 时间线左边线索引布局；空状态组件 `EmptyState`
+- 首页粒子密度提升，其他页面降低
+
+---
+
+### 修复
+
+- `/api/ask` 默认需登录（`ASK_PUBLIC=true` 可开放）；OpenAI 兼容 Provider 校验 HTTP 错误
+- Provider 构造函数不再突变全局 `process.env`；OpenRouter 补充推荐请求头
+- Qdrant 向量维度变更时明确报错；向量增量失败写入 `indexErrors`
+- 向量检索增加 `VECTOR_MIN_SCORE` 阈值；RAG Prompt 去除重复问题
+- 全量向量重建跳过冗余按篇删除；超长文章截断时输出 warn 日志
+
+### 测试
+
+- 新增 ask-auth、reserved-paths、embeddings、openai-provider 测试
+
+---
+
+### 新增
+
+- **RAG 知识问答**：`/ask` 页面 + `POST /api/ask`，语义检索笔记并由 LLM 综合回答
+- **向量索引**：`lib/vector-index.ts`（Qdrant REST）、`lib/embeddings.ts`、`lib/text-chunk.ts`
+- 同步 / 后台 CRUD 自动增量向量索引；`POST /api/vector/reindex` 全量重建
+- CLI：`npm run rag:reindex`
+- Docker Qdrant 改为 `profiles: [rag]`（`docker compose --profile rag up -d`）
+
+### 配置
+
+- `QDRANT_URL`、`EMBEDDING_PROVIDER`、`EMBEDDING_MODEL`、`EMBEDDING_DIMENSION`
+
+---
+
+## [0.2.4] - 2026-06-02
+
+### 新增
+
+- **分类页分页**：`/{category}?page=2`，每页 24 篇，保留专题大纲
+- **DB 同步锁**：`SiteConfig` 表实现多实例互斥（替代文件锁）
+- **API 限速**：搜索 / 同步 / 上传 / 重建索引（内存滑动窗口）
+- **EDITOR 角色 RBAC**：编辑者隐藏设置页，同步/重建索引需 ADMIN
+
+### 变更
+
+- Session/JWT 携带 `role` 字段
+
+---
+
+## [0.2.3] - 2026-06-02
+
+### 新增
+
+- **MinIO / S3 对象存储**：完整实现 `upload` / `delete` / `exists`；共享 `image-process.ts` WebP 压缩
+- **Docker MinIO**：`docker compose --profile storage up -d minio`
+- **双向链接**：`[[标题]]` 渲染为文章链接；`PostLink` 表随同步/CRUD 自动维护
+- 搜索页 SQLite 回退时显示 Meilisearch 配置提示
+
+### 变更
+
+- 移除未使用的 `fuse.js` 依赖；README 搜索说明更新
+- 上传 API 修复 WebP 转换后 `storedKey` 与文件不一致的问题
+- `docs/ARCHITECTURE.md` 目录树与实现对齐
+
+---
+
+## [0.2.2] - 2026-06-02
+
+### 新增
+
+- 公开页数据缓存：`unstable_cache` + ISR（首页/分类 5 分钟，文章 1 小时）
+- 内容变更自动 `revalidateTag`（同步、后台 CRUD、重建索引）
+- 阅读量内存缓冲批量写入（`lib/view-count.ts`）
+- Vitest 单元测试（content-sync、markdown、search-index、heading-slug、view-count）
+- GitHub Actions CI（test + lint + build）
+
+### 变更
+
+- `npm test` 运行 Vitest；`test:sync` 指向 content-sync 测试文件
+
+---
+
+## [0.2.1] - 2026-06-02
+
+### 新增
+
+**Code Review 修复与体验优化**
+- TOC slug 与 `rehype-slug` 对齐（`lib/heading-slug.ts` + `github-slugger`）
+- 内容源策略：`lib/content-source.ts`；删除 API 支持 `?deleteFile=1` 同步删 MD
+- 首页分页（`/?page=`，每页 24 篇）；搜索页 debounce + URL 同步
+- 后台笔记搜索 `GET /api/posts?q=`；教程名 autocomplete（`seriesOptions=1`）
+- 文首要点 `outline` 编辑器；新建页实时预览 + Ctrl+S
+- 重建搜索索引：`POST /api/search/reindex`
+- 同步单元测试：`npm run test:sync`
+
+**P2：SEO / 编辑器 / 同步加固**
+- JSON-LD（Article、Breadcrumb、WebSite、CollectionPage）+ og:image / Twitter Card
+- 默认分享图 `public/og-default.svg`
+- 编辑器内附件上传插入（`EditorAttachToolbar` + 光标处 `insertText`）
+- 同步互斥锁（`lib/sync-lock.ts`，并发返回 409）
+- Windows 同步脚本 `scripts/sync-local.ps1`（WSL rsync / scp 回退）
+- 可选附件 rsync（`SYNC_UPLOADS` 配置项）
+
+### 变更
+
+- 同步指纹改为内容 SHA256（替代纯 mtime）；增量 Meilisearch 索引
+- `sync-local.sh`：3 次重试、附件同步、`SYNC_SECRET` 鉴权
+- 设置页展示同步 `errors` / `indexErrors` 明细
+- 分类页面包屑；Header 分类导航高亮
+
+### 修复
+
+- 解析失败文件不再误删数据库记录
+- 同路径 slug 变更时正确清理旧记录
+- Meilisearch filter 值转义；全量重建索引先清空再写入
+- `docs/OPERATIONS.md` 同步鉴权示例修正为 `X-Sync-Secret`
+
+---
+
 ## [0.2.0] - 2026-06-02
 
 ### 新增
@@ -105,10 +327,10 @@
 
 ### [0.4.0] - 知识图谱
 
-- [ ] 双向链接关系图（D3.js 力导向图）
-- [ ] 标签聚合图
-- [ ] 知识时间演化视图
-- [ ] 节点点击跳转
+- [x] 双向链接关系图（D3.js 力导向图）
+- [x] 标签聚合图（标签共现）
+- [x] 知识时间演化视图
+- [x] 节点点击跳转
 
 ### [0.5.0] - 统计与增强
 

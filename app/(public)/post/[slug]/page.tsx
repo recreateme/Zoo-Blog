@@ -2,130 +2,71 @@ import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { CalendarDays, Clock, Eye, Tag, ExternalLink, Pencil } from 'lucide-react'
-import prisma from '@/lib/db'
 import { parseMarkdown } from '@/lib/markdown'
 import { parseTags, formatDate, formatNumber, formatWordCount } from '@/lib/utils'
 import { getCategoryById } from '@/lib/categories'
-import { getPostAdjacency, getSeriesPosts } from '@/lib/post-navigation'
+import {
+  buildArticleJsonLd,
+  buildArticleOpenGraph,
+  buildBreadcrumbJsonLd,
+  buildPostBreadcrumbItems,
+  buildTwitterCard,
+} from '@/lib/seo'
+import JsonLd from '@/components/seo/JsonLd'
 import { getArticleOutline } from '@/lib/outline'
+import {
+  getPublishedPostCached,
+  getRelatedPostsCached,
+  getPostAdjacencyCached,
+  getSeriesPostsCached,
+  getWikiSlugMapCached,
+} from '@/lib/cached-queries'
+import { PAGE_REVALIDATE } from '@/lib/cache-tags'
+import { recordView } from '@/lib/view-count'
+import { preprocessWikiLinksInMarkdown } from '@/lib/wiki-links'
 import Badge from '@/components/ui/Badge'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import TableOfContents from '@/components/post/TableOfContents'
 import ArticleOutline from '@/components/post/ArticleOutline'
 import MarkdownRenderer from '@/components/post/MarkdownRenderer'
 import ReadingProgress from '@/components/post/ReadingProgress'
-import PostCard from '@/components/post/PostCard'
 import PostNav from '@/components/post/PostNav'
+import RelatedPosts from '@/components/post/RelatedPosts'
 import SeriesNav from '@/components/post/SeriesNav'
 import MobileToc from '@/components/post/MobileToc'
 import { getEditOnGitHubUrl } from '@/lib/content-links'
-import type { PostMeta } from '@/types'
+
+export const revalidate = PAGE_REVALIDATE.post
 
 interface PostPageProps {
   params: { slug: string }
 }
 
 async function getPost(slug: string) {
-  const post = await prisma.post.findUnique({
-    where: { id: slug, status: 'PUBLISHED' },
-  })
-  return post
-}
-
-const postListSelect = {
-  id: true,
-  title: true,
-  summary: true,
-  category: true,
-  subcategory: true,
-  series: true,
-  tags: true,
-  status: true,
-  readingTime: true,
-  viewCount: true,
-  createdAt: true,
-  publishedAt: true,
-} as const
-
-function mapToPostMeta(
-  p: {
-    id: string
-    title: string
-    summary: string | null
-    category: string
-    subcategory: string | null
-    series?: string | null
-    tags: string
-    status: string
-    readingTime: number | null
-    viewCount: number
-    createdAt: Date
-    publishedAt: Date | null
-  }
-): PostMeta {
-  return {
-    ...p,
-    tags: parseTags(p.tags as string),
-    status: p.status as 'DRAFT' | 'PUBLISHED',
-  }
-}
-
-async function getRelatedPosts(
-  postId: string,
-  category: string,
-  series: string | null
-): Promise<PostMeta[]> {
-  const seriesName = series?.trim() || null
-  const related: PostMeta[] = []
-
-  if (seriesName) {
-    const inSeries = await prisma.post.findMany({
-      where: { status: 'PUBLISHED', category, series: seriesName, id: { not: postId } },
-      orderBy: [{ seriesOrder: 'asc' }, { publishedAt: 'desc' }],
-      take: 4,
-      select: postListSelect,
-    })
-    related.push(...inSeries.map(mapToPostMeta))
-  }
-
-  if (related.length < 4) {
-    const more = await prisma.post.findMany({
-      where: {
-        status: 'PUBLISHED',
-        category,
-        id: { notIn: [postId, ...related.map((p) => p.id)] },
-      },
-      orderBy: { publishedAt: 'desc' },
-      take: 4 - related.length,
-      select: postListSelect,
-    })
-    related.push(...more.map(mapToPostMeta))
-  }
-
-  return related.slice(0, 4)
-}
-
-async function incrementViewCount(slug: string) {
-  await prisma.post.update({
-    where: { id: slug },
-    data: { viewCount: { increment: 1 } },
-  })
+  return getPublishedPostCached(slug)
 }
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
   const post = await getPost(params.slug)
   if (!post) return { title: '文章不存在' }
   const cat = getCategoryById(post.category)
+  const tags = parseTags(post.tags)
   return {
     title: post.title,
     description: post.summary ?? undefined,
-    openGraph: {
+    openGraph: buildArticleOpenGraph({
       title: post.title,
-      description: post.summary ?? undefined,
-      type: 'article',
-      publishedTime: post.publishedAt?.toISOString(),
-      tags: parseTags(post.tags),
-    },
+      summary: post.summary,
+      content: post.content,
+      id: post.id,
+      publishedAt: post.publishedAt,
+      tags,
+    }),
+    twitter: buildTwitterCard({
+      title: post.title,
+      summary: post.summary,
+      content: post.content,
+    }),
     other: {
       'article:section': cat?.name ?? post.category,
     },
@@ -136,32 +77,55 @@ export default async function PostPage({ params }: PostPageProps) {
   const post = await getPost(params.slug)
   if (!post) notFound()
 
-  // 解析 Markdown
-  const { content: html, toc } = await parseMarkdown(post.content)
+  const slugMap = await getWikiSlugMapCached()
+  const markdownBody = preprocessWikiLinksInMarkdown(post.content, slugMap)
+
+  const { content: html, toc } = await parseMarkdown(markdownBody)
   const tags = parseTags(post.tags)
   const category = getCategoryById(post.category)
 
-  // 并行获取相关文章 + 增加访问量
   const outlineItems = getArticleOutline(post.content, post.summary, post.outline)
   const editUrl = getEditOnGitHubUrl(post.filePath)
 
   const seriesName = post.series?.trim() || null
 
   const [relatedPosts, adjacency, seriesPosts] = await Promise.all([
-    getRelatedPosts(post.id, post.category, post.series),
-    getPostAdjacency(post.id, post.category, post.series),
-    seriesName ? getSeriesPosts(post.category, seriesName) : Promise.resolve([]),
-    incrementViewCount(post.id),
+    getRelatedPostsCached(post.id, post.category, post.series),
+    getPostAdjacencyCached(post.id, post.category, post.series),
+    seriesName ? getSeriesPostsCached(post.category, seriesName) : Promise.resolve([]),
   ])
+
+  recordView(post.id)
 
   return (
     <>
+      <JsonLd
+        data={[
+          buildArticleJsonLd({
+            id: post.id,
+            title: post.title,
+            summary: post.summary,
+            content: post.content,
+            category: post.category,
+            publishedAt: post.publishedAt,
+            updatedAt: post.updatedAt,
+            tags,
+            series: post.series,
+            subcategory: post.subcategory,
+          }),
+          buildBreadcrumbJsonLd(buildPostBreadcrumbItems({
+            title: post.title,
+            category: post.category,
+            series: post.series,
+            subcategory: post.subcategory,
+          })),
+        ]}
+      />
       <ReadingProgress />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-        <div className="flex gap-12">
-          {/* 主内容 */}
-          <article className="flex-1 min-w-0">
+      <div className="post-page">
+        <div className="post-layout">
+          <article className="post-article">
             <Breadcrumbs
               categoryId={post.category}
               series={post.series}
@@ -169,56 +133,29 @@ export default async function PostPage({ params }: PostPageProps) {
               currentTitle={post.title}
             />
 
-            {/* 文章头部 */}
-            <header className="mb-8">
-              <div className="flex items-center gap-2 mb-4">
+            <header className="post-header">
+              <div className="post-badges">
                 <Badge variant="category" categoryId={post.category}>
                   {category?.name ?? post.category}
                 </Badge>
-                {post.subcategory && (
-                  <Badge>{post.subcategory}</Badge>
-                )}
-                {seriesName && (
-                  <Badge>{seriesName}</Badge>
-                )}
+                {post.subcategory && <Badge>{post.subcategory}</Badge>}
+                {seriesName && <Badge>{seriesName}</Badge>}
               </div>
 
-              <h1
-                className="text-3xl md:text-4xl mb-5 leading-tight"
-                style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontWeight: 400,
-                  letterSpacing: '-0.02em',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {post.title}
-              </h1>
+              <h1 className="post-title">{post.title}</h1>
 
-              {post.summary && (
-                <p
-                  className="text-lg leading-relaxed mb-5"
-                  style={{
-                    color: 'var(--text-secondary)',
-                    fontFamily: 'var(--font-serif)',
-                    fontStyle: 'italic',
-                    borderLeft: '3px solid var(--accent)',
-                    paddingLeft: '1rem',
-                  }}
-                >
-                  {post.summary}
-                </p>
+              {seriesName && seriesPosts.length > 0 && (
+                <SeriesNav
+                  seriesName={seriesName}
+                  currentId={post.id}
+                  posts={seriesPosts}
+                />
               )}
 
-              {/* Meta */}
-              <div
-                className="flex flex-wrap items-center gap-4 text-sm pb-6"
-                style={{
-                  color: 'var(--text-tertiary)',
-                  borderBottom: '1px solid var(--border-subtle)',
-                }}
-              >
-                <span className="flex items-center gap-1.5">
+              {post.summary && <p className="post-summary">{post.summary}</p>}
+
+              <div className="post-meta">
+                <span className="post-meta-item">
                   <CalendarDays size={13} />
                   {formatDate(post.publishedAt ?? post.createdAt)}
                 </span>
@@ -226,13 +163,13 @@ export default async function PostPage({ params }: PostPageProps) {
                   <span>{formatWordCount(post.wordCount)}</span>
                 )}
                 {post.readingTime && (
-                  <span className="flex items-center gap-1.5">
+                  <span className="post-meta-item">
                     <Clock size={13} />
                     阅读约 {post.readingTime} 分钟
                   </span>
                 )}
                 {post.viewCount > 0 && (
-                  <span className="flex items-center gap-1.5">
+                  <span className="post-meta-item">
                     <Eye size={13} />
                     {formatNumber(post.viewCount)} 次阅读
                   </span>
@@ -242,7 +179,7 @@ export default async function PostPage({ params }: PostPageProps) {
                     href={editUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 hover:text-[var(--accent)] transition-colors ml-auto"
+                    className="post-edit-link"
                   >
                     <Pencil size={13} />
                     编辑此页
@@ -254,25 +191,12 @@ export default async function PostPage({ params }: PostPageProps) {
 
             <MobileToc toc={toc} />
 
-            {seriesName && seriesPosts.length > 0 && (
-              <SeriesNav
-                seriesName={seriesName}
-                currentId={post.id}
-                posts={seriesPosts}
-              />
-            )}
-
             <ArticleOutline items={outlineItems} />
 
-            {/* 正文 */}
             <MarkdownRenderer html={html} />
 
-            {/* 标签 */}
             {tags.length > 0 && (
-              <div
-                className="flex flex-wrap items-center gap-2 mt-10 pt-6"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <div className="post-tags">
                 <Tag size={13} style={{ color: 'var(--text-tertiary)' }} />
                 {tags.map((tag) => (
                   <Link key={tag} href={`/search?tag=${encodeURIComponent(tag)}`}>
@@ -283,10 +207,9 @@ export default async function PostPage({ params }: PostPageProps) {
             )}
           </article>
 
-          {/* 右侧边栏：目录 */}
           {toc.length > 0 && (
-            <aside className="hidden xl:block w-56 shrink-0">
-              <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto">
+            <aside className="post-sidebar">
+              <div className="post-sidebar-inner">
                 <TableOfContents toc={toc} />
               </div>
             </aside>
@@ -295,22 +218,7 @@ export default async function PostPage({ params }: PostPageProps) {
 
         <PostNav adjacency={adjacency} />
 
-        {/* 相关文章 */}
-        {relatedPosts.length > 0 && (
-          <section className="mt-16">
-            <h2
-              className="text-lg mb-5"
-              style={{ fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}
-            >
-              {seriesName ? '同专题笔记' : '相关笔记'}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {relatedPosts.map((post) => (
-                <PostCard key={post.id} post={post} variant="compact" />
-              ))}
-            </div>
-          </section>
-        )}
+        <RelatedPosts posts={relatedPosts} seriesName={seriesName} />
       </div>
     </>
   )

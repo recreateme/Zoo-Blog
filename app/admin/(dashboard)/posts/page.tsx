@@ -2,14 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { PenSquare, Trash2, Eye, Search, Filter, Plus, Loader2 } from 'lucide-react'
+import { PenSquare, Trash2, Eye, Search, Plus, Loader2 } from 'lucide-react'
 import { CATEGORIES } from '@/lib/categories'
-import { formatDateShort, parseTags } from '@/lib/utils'
+import { formatDateShort } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
+import EmptyState from '@/components/ui/EmptyState'
 import type { PostMeta } from '@/types'
 
+type AdminPostRow = PostMeta & { filePath?: string | null; updatedAt?: Date }
+
 export default function PostsPage() {
-  const [posts, setPosts] = useState<PostMeta[]>([])
+  const [posts, setPosts] = useState<AdminPostRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -23,59 +26,62 @@ export default function PostsPage() {
     const params = new URLSearchParams({ page: page.toString(), pageSize: '15' })
     if (statusFilter) params.set('status', statusFilter)
     if (categoryFilter) params.set('category', categoryFilter)
+    if (search.trim()) params.set('q', search.trim())
 
     const res = await fetch(`/api/posts?${params}`)
     const data = await res.json()
     setPosts(data.posts ?? [])
     setTotal(data.total ?? 0)
     setLoading(false)
-  }, [page, statusFilter, categoryFilter])
+  }, [page, statusFilter, categoryFilter, search])
 
-  useEffect(() => { fetchPosts() }, [fetchPosts])
+  useEffect(() => {
+    const timer = setTimeout(() => fetchPosts(), search ? 300 : 0)
+    return () => clearTimeout(timer)
+  }, [fetchPosts, search])
 
-  const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`确定要删除《${title}》吗？此操作不可撤销。`)) return
-    setDeleting(id)
-    await fetch(`/api/posts/${id}`, { method: 'DELETE' })
+  const handleDelete = async (post: AdminPostRow) => {
+    if (!confirm(`确定删除《${post.title}》？`)) return
+
+    let deleteFile = false
+    if (post.filePath?.trim()) {
+      deleteFile = confirm(
+        `该笔记绑定文件：${post.filePath}\n\n` +
+          '是否同时删除 Markdown 文件？\n' +
+          '· 确定 = 删文件 + 数据库（推荐）\n' +
+          '· 取消 = 仅删数据库（下次同步会重新入库）'
+      )
+    }
+
+    setDeleting(post.id)
+    const url = deleteFile ? `/api/posts/${post.id}?deleteFile=1` : `/api/posts/${post.id}`
+    await fetch(url, { method: 'DELETE' })
     setDeleting(null)
     fetchPosts()
   }
 
-  const filtered = posts.filter((p) =>
-    !search || p.title.toLowerCase().includes(search.toLowerCase())
-  )
-
   return (
-    <div className="p-6 md:p-8 max-w-5xl">
+    <div className="admin-page">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1
-            className="text-2xl mb-1"
-            style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, color: 'var(--text-primary)' }}
-          >
-            笔记管理
-          </h1>
-          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-            共 {total} 篇笔记
+        <header>
+          <h1 className="admin-page-title">笔记管理</h1>
+          <p className="admin-page-lead">
+            共 {total} 篇 · 文件绑定笔记以同步为准，后台笔记仅存在于数据库
           </p>
-        </div>
+        </header>
         <Link href="/admin/editor" className="btn btn-primary">
           <Plus size={15} /> 新建笔记
         </Link>
       </div>
 
-      {/* 过滤栏 */}
-      <div
-        className="flex flex-wrap items-center gap-3 mb-5 p-3 rounded-xl"
-        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-      >
+      <div className="admin-toolbar">
         <div className="relative flex-1 min-w-40">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索标题…"
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            placeholder="搜索标题或 slug…"
             className="input pl-8 py-1.5 text-sm"
           />
         </div>
@@ -102,45 +108,33 @@ export default function PostsPage() {
         </select>
       </div>
 
-      {/* 表格 */}
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{ border: '1px solid var(--border-subtle)' }}
-      >
+      <div className="admin-table-wrap">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 size={20} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16" style={{ color: 'var(--text-tertiary)' }}>
-            <p className="text-3xl mb-2">📭</p>
-            <p>暂无笔记</p>
-          </div>
+        ) : posts.length === 0 ? (
+          <EmptyState
+            compact
+            title="暂无笔记"
+            description="在后台新建笔记，或从 content/ 目录同步 Markdown 文件"
+            actionHref="/admin/editor"
+            actionLabel="新建笔记"
+          />
         ) : (
           <table className="w-full">
             <thead>
-              <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)' }}>
-                {['标题', '分类', '专题', '状态', '更新时间', '操作'].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
+              <tr className="admin-table-head">
+                {['标题', '来源', '分类', '专题', '状态', '更新时间', '操作'].map((h) => (
+                  <th key={h} className="admin-table-th">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((post, i) => (
-                <tr
-                  key={post.id}
-                  className="group hover:bg-[var(--bg-surface)] transition-colors"
-                  style={{
-                    borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                    background: 'var(--bg-elevated)',
-                  }}
-                >
+              {posts.map((post) => (
+                <tr key={post.id} className="admin-table-row group">
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/editor/${post.id}`}
@@ -151,9 +145,14 @@ export default function PostsPage() {
                     </Link>
                     {post.readingTime && (
                       <span className="text-xs mt-0.5 block" style={{ color: 'var(--text-tertiary)' }}>
-                        约 {post.readingTime} 分钟阅读
+                        约 {post.readingTime} 分钟
                       </span>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={post.filePath ? 'tag' : 'status'}>
+                      {post.filePath ? '文件' : '后台'}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="category" categoryId={post.category}>
@@ -161,13 +160,7 @@ export default function PostsPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    {post.series?.trim() ? (
-                      <span title={post.seriesOrder != null ? `顺序 ${post.seriesOrder}` : undefined}>
-                        {post.series}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
+                    {post.series?.trim() ? post.series : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="status">{post.status}</Badge>
@@ -177,32 +170,20 @@ export default function PostsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Link
-                        href={`/post/${post.id}`}
-                        target="_blank"
-                        className="btn btn-ghost p-1.5"
-                        title="预览"
-                      >
+                      <Link href={`/post/${post.id}`} target="_blank" className="btn btn-ghost p-1.5" title="预览">
                         <Eye size={14} />
                       </Link>
-                      <Link
-                        href={`/admin/editor/${post.id}`}
-                        className="btn btn-ghost p-1.5"
-                        title="编辑"
-                      >
+                      <Link href={`/admin/editor/${post.id}`} className="btn btn-ghost p-1.5" title="编辑">
                         <PenSquare size={14} />
                       </Link>
                       <button
-                        onClick={() => handleDelete(post.id, post.title)}
+                        onClick={() => handleDelete(post)}
                         disabled={deleting === post.id}
                         className="btn btn-ghost p-1.5"
                         title="删除"
                         style={{ color: '#dc2626' }}
                       >
-                        {deleting === post.id
-                          ? <Loader2 size={14} className="animate-spin" />
-                          : <Trash2 size={14} />
-                        }
+                        {deleting === post.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                       </button>
                     </div>
                   </td>
@@ -213,18 +194,13 @@ export default function PostsPage() {
         )}
       </div>
 
-      {/* 分页 */}
       {total > 15 && (
         <div className="flex items-center justify-between mt-4">
-          <span className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+          <span className="text-sm text-meta">
             第 {page} 页，共 {Math.ceil(total / 15)} 页
           </span>
           <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="btn btn-secondary text-sm"
-            >
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary text-sm">
               上一页
             </button>
             <button

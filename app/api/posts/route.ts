@@ -4,7 +4,11 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { parseTags, stringifyTags, computePostStats } from '@/lib/utils'
 import { indexPostById } from '@/lib/search-index'
+import { indexPostById as indexPostVectors } from '@/lib/vector-index'
+import { revalidatePublishedContent } from '@/lib/revalidate-content'
+import { syncPostLinksForContent, buildWikiSlugMap, removePostLinksForIds } from '@/lib/wiki-links'
 import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
 
 const CreatePostSchema = z.object({
   id: z.string().min(1).max(100),
@@ -17,6 +21,7 @@ const CreatePostSchema = z.object({
   tags: z.array(z.string()).optional().default([]),
   status: z.enum(['DRAFT', 'PUBLISHED']).optional().default('DRAFT'),
   summary: z.string().optional(),
+  outline: z.array(z.string()).optional().default([]),
 })
 
 // GET /api/posts - 获取文章列表（管理后台用）
@@ -27,13 +32,38 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const status = searchParams.get('status')
   const category = searchParams.get('category')
+  const q = searchParams.get('q')?.trim()
+  const seriesOptions = searchParams.get('seriesOptions') === '1'
+  const optionsCategory = searchParams.get('category')?.trim()
+
+  if (seriesOptions) {
+    const where: Prisma.PostWhereInput = { series: { not: null } }
+    if (optionsCategory) where.category = optionsCategory
+    const rows = await prisma.post.findMany({
+      where,
+      select: { series: true },
+      distinct: ['series'],
+      orderBy: { series: 'asc' },
+    })
+    const series = rows
+      .map((r) => r.series?.trim())
+      .filter((s): s is string => !!s)
+    return NextResponse.json({ series })
+  }
+
   const page = parseInt(searchParams.get('page') ?? '1')
   const pageSize = parseInt(searchParams.get('pageSize') ?? '20')
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {}
+  const where: Prisma.PostWhereInput = {}
   if (status) where.status = status
   if (category) where.category = category
+  if (q) {
+    where.OR = [
+      { title: { contains: q } },
+      { summary: { contains: q } },
+      { id: { contains: q } },
+    ]
+  }
 
   const [posts, total] = await Promise.all([
     prisma.post.findMany({
@@ -45,7 +75,7 @@ export async function GET(req: NextRequest) {
         id: true, title: true, summary: true, category: true, subcategory: true,
         series: true, seriesOrder: true, wordCount: true,
         tags: true, status: true, readingTime: true, viewCount: true,
-        createdAt: true, updatedAt: true, publishedAt: true,
+        createdAt: true, updatedAt: true, publishedAt: true, filePath: true,
       },
     }),
     prisma.post.count({ where }),
@@ -92,6 +122,7 @@ export async function POST(req: NextRequest) {
         tags: stringifyTags(data.tags),
         status: data.status,
         summary: data.summary ?? null,
+        outline: JSON.stringify(data.outline ?? []),
         readingTime,
         wordCount,
         publishedAt,
@@ -100,8 +131,26 @@ export async function POST(req: NextRequest) {
 
     try {
       await indexPostById(post.id)
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.warn(`搜索索引创建失败 (${post.id}):`, err)
+    }
+
+    try {
+      await indexPostVectors(post.id)
+    } catch (err) {
+      console.warn(`向量索引创建失败 (${post.id}):`, err)
+    }
+
+    if (post.status === 'PUBLISHED') {
+      revalidatePublishedContent({ postIds: [post.id] })
+      try {
+        const slugMap = await buildWikiSlugMap()
+        slugMap[post.title.trim()] = post.id
+        slugMap[post.id] = post.id
+        await syncPostLinksForContent(post.id, post.content, slugMap)
+      } catch (err) {
+        console.warn(`双向链接同步失败 (${post.id}):`, err)
+      }
     }
 
     return NextResponse.json({ success: true, post })

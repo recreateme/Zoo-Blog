@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Save, Sparkles, Loader2, Tag, RotateCcw } from 'lucide-react'
 import { CATEGORIES } from '@/lib/categories'
 import { generateSlug, computePostStats, formatWordCount } from '@/lib/utils'
-import MonacoEditor from '@/components/editor/MonacoEditor'
+import MonacoEditor, { type MonacoEditorHandle } from '@/components/editor/MonacoEditor'
+import EditorAttachToolbar from '@/components/editor/EditorAttachToolbar'
 import EditorSeriesFields from '@/components/editor/EditorSeriesFields'
+import EditorOutlineFields from '@/components/editor/EditorOutlineFields'
 
 const DEFAULT_CONTENT = `# 笔记标题
 
@@ -31,16 +33,43 @@ export default function NewEditorPage() {
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [summary, setSummary] = useState('')
+  const [outline, setOutline] = useState<string[]>([])
+  const [seriesSuggestions, setSeriesSuggestions] = useState<string[]>([])
+  const [previewHtml, setPreviewHtml] = useState('')
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT')
   const [saving, setSaving] = useState(false)
   const [aiLoading, setAiLoading] = useState<'summary' | 'tags' | null>(null)
   const [error, setError] = useState('')
+  const editorRef = useRef<MonacoEditorHandle>(null)
 
   // 根据标题自动生成 slug
   const handleTitleChange = (val: string) => {
     setTitle(val)
     if (!slug) setSlug(generateSlug(val))
   }
+
+  useEffect(() => {
+    fetch(`/api/posts?seriesOptions=1&category=${encodeURIComponent(category)}`)
+      .then((r) => r.json())
+      .then((data) => setSeriesSuggestions(data.series ?? []))
+      .catch(() => setSeriesSuggestions([]))
+  }, [category])
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (!content) return
+      try {
+        const res = await fetch('/api/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        })
+        const data = await res.json()
+        if (data.html) setPreviewHtml(data.html)
+      } catch { /* ignore */ }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [content])
 
   // AI 生成摘要
   const handleAiSummary = async () => {
@@ -83,7 +112,7 @@ export default function NewEditorPage() {
   }
 
   // 保存
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!title.trim()) { setError('请输入标题'); return }
     if (!slug.trim()) { setError('请输入 Slug'); return }
 
@@ -104,6 +133,7 @@ export default function NewEditorPage() {
         tags,
         status,
         summary: summary || undefined,
+        outline,
       }),
     })
     const data = await res.json()
@@ -114,7 +144,18 @@ export default function NewEditorPage() {
       setError(data.error ?? '保存失败')
     }
     setSaving(false)
-  }
+  }, [slug, title, content, category, subcategory, series, seriesOrder, tags, status, summary, outline, router])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleSave])
 
   const { readingTime, wordCount } = computePostStats(content)
 
@@ -235,9 +276,12 @@ export default function NewEditorPage() {
             <EditorSeriesFields
               series={series}
               seriesOrder={seriesOrder}
+              seriesSuggestions={seriesSuggestions}
               onSeriesChange={setSeries}
               onSeriesOrderChange={setSeriesOrder}
             />
+
+            <EditorOutlineFields items={outline} onChange={setOutline} />
 
             {/* 摘要 */}
             <div>
@@ -315,14 +359,18 @@ export default function NewEditorPage() {
                 ))}
               </div>
             </div>
+
+            <EditorAttachToolbar onInsert={(md) => editorRef.current?.insertText(md)} />
           </div>
         </div>
 
         {/* 右侧：编辑器 */}
         <div className="flex-1 min-w-0">
           <MonacoEditor
+            ref={editorRef}
             value={content}
             onChange={setContent}
+            previewHtml={previewHtml}
           />
         </div>
       </div>

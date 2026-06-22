@@ -39,6 +39,10 @@ export async function createLLMProvider(): Promise<LLMProvider> {
       const { OllamaProvider } = await import('./ollama')
       return new OllamaProvider()
     }
+    case 'openrouter': {
+      const { OpenRouterProvider } = await import('./openrouter')
+      return new OpenRouterProvider()
+    }
     default:
       throw new Error(`未知的 LLM 提供商: ${provider}`)
   }
@@ -97,14 +101,12 @@ ${content.slice(0, 2000)}
   "suggestedCategory": "${category}"
 }`.trim(),
 
-  rag: (question: string, contexts: string[]) => `
-你是用户的个人知识库助手。请根据以下参考内容回答用户的问题。
+  rag: (contexts: string[]) => `
+你是 PLAIN MLOG 的笔记助手。请根据以下参考内容回答用户的问题。
 如果参考内容中没有足够信息，请直接说明，不要编造答案。
 
 参考笔记内容：
 ${contexts.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}
-
-用户问题：${question}
 
 请用中文回答，并在回答末尾标注参考了哪些笔记（用序号）。`.trim(),
 }

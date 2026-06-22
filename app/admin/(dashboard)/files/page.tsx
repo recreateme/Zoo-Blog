@@ -1,20 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Upload, Trash2, Copy, FileText, Image, Loader2, X } from 'lucide-react'
-import { formatFileSize } from '@/lib/utils'
+import { Upload, Trash2, Copy, FileText, Image as ImageIcon, Loader2, X } from 'lucide-react'
+import { formatFileSize, cn } from '@/lib/utils'
+import EmptyState from '@/components/ui/EmptyState'
+import type { Attachment } from '@/types'
 
-interface Attachment {
-  id: string
-  originalName: string
-  url: string
-  type: 'IMAGE' | 'PDF' | 'WORD' | 'OTHER'
-  size: number
-  createdAt: string
-}
+type FileAttachment = Pick<Attachment, 'id' | 'originalName' | 'url' | 'type' | 'size' | 'createdAt'>
 
 export default function FilesPage() {
-  const [files, setFiles] = useState<Attachment[]>([])
+  const [files, setFiles] = useState<FileAttachment[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -66,19 +61,17 @@ export default function FilesPage() {
   }
 
   const TypeIcon = ({ type }: { type: string }) => {
-    if (type === 'IMAGE') return <Image size={16} style={{ color: '#0284c7' }} />
+    if (type === 'IMAGE') return <ImageIcon size={16} style={{ color: '#0284c7' }} aria-hidden />
     return <FileText size={16} style={{ color: 'var(--text-tertiary)' }} />
   }
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl">
+    <div className="admin-page">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl mb-1" style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, color: 'var(--text-primary)' }}>
-            附件管理
-          </h1>
-          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>共 {total} 个文件</p>
-        </div>
+        <header>
+          <h1 className="admin-page-title">附件管理</h1>
+          <p className="admin-page-lead">共 {total} 个文件</p>
+        </header>
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
@@ -102,20 +95,14 @@ export default function FilesPage() {
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
-        className="border-2 border-dashed rounded-xl p-8 text-center mb-6 transition-colors cursor-pointer"
-        style={{
-          borderColor: dragOver ? 'var(--accent)' : 'var(--border-default)',
-          background: dragOver ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-        }}
+        className={cn('admin-dropzone', dragOver && 'admin-dropzone-active')}
         onClick={() => fileInputRef.current?.click()}
       >
         <Upload size={24} className="mx-auto mb-2" style={{ color: dragOver ? 'var(--accent)' : 'var(--text-tertiary)' }} />
-        <p className="text-sm" style={{ color: dragOver ? 'var(--accent)' : 'var(--text-secondary)' }}>
+        <p className="text-sm text-lead" style={{ color: dragOver ? 'var(--accent)' : undefined }}>
           拖放文件到这里，或点击选择文件
         </p>
-        <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-          支持图片、PDF、Word，最大 10MB
-        </p>
+        <p className="text-xs text-meta mt-1">支持图片、PDF、Word，最大 10MB</p>
       </div>
 
       {/* 类型筛选 */}
@@ -142,18 +129,15 @@ export default function FilesPage() {
           <Loader2 size={20} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
         </div>
       ) : files.length === 0 ? (
-        <div className="text-center py-20 rounded-xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-          <p className="text-3xl mb-2">📎</p>
-          <p style={{ color: 'var(--text-secondary)' }}>还没有上传任何文件</p>
-        </div>
+        <EmptyState
+          compact
+          title="暂无附件"
+          description="上传图片、PDF 或 Word 文件，在编辑器中插入链接引用"
+        />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {files.map((file) => (
-            <div
-              key={file.id}
-              className="group rounded-xl overflow-hidden"
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-            >
+            <div key={file.id} className="admin-panel p-0 overflow-hidden group">
               {/* 预览区 */}
               <div className="h-32 flex items-center justify-center" style={{ background: 'var(--bg-surface)' }}>
                 {file.type === 'IMAGE' ? (

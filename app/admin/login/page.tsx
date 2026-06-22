@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { BookOpen, Loader2, Eye, EyeOff } from 'lucide-react'
 import ThemeSwitcher from '@/components/ui/ThemeSwitcher'
+import { getSiteName } from '@/lib/site'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -64,7 +65,7 @@ export default function LoginPage() {
             className="text-xl"
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--text-primary)' }}
           >
-            {process.env.NEXT_PUBLIC_SITE_NAME ?? '知识库'}
+            {getSiteName()}
           </span>
         </div>
 

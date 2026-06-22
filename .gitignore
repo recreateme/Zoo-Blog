@@ -46,3 +46,4 @@ coverage/
 .eslintcache
 *.tsbuildinfo
 .sync.env
+.tmp-anthropic-skills/

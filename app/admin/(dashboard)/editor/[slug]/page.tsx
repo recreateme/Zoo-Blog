@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Save, Sparkles, Loader2, Tag, ExternalLink, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIES } from '@/lib/categories'
 import { computePostStats, formatWordCount } from '@/lib/utils'
-import MonacoEditor from '@/components/editor/MonacoEditor'
+import MonacoEditor, { type MonacoEditorHandle } from '@/components/editor/MonacoEditor'
+import EditorAttachToolbar from '@/components/editor/EditorAttachToolbar'
 import EditorSeriesFields from '@/components/editor/EditorSeriesFields'
+import EditorOutlineFields from '@/components/editor/EditorOutlineFields'
 
 export default function EditEditorPage() {
   const params = useParams()
@@ -22,6 +24,8 @@ export default function EditEditorPage() {
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [summary, setSummary] = useState('')
+  const [outline, setOutline] = useState<string[]>([])
+  const [seriesSuggestions, setSeriesSuggestions] = useState<string[]>([])
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT')
   const [previewHtml, setPreviewHtml] = useState('')
   const [loading, setLoading] = useState(true)
@@ -29,6 +33,7 @@ export default function EditEditorPage() {
   const [aiLoading, setAiLoading] = useState<'summary' | 'tags' | null>(null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
+  const editorRef = useRef<MonacoEditorHandle>(null)
 
   // 加载已有文章
   useEffect(() => {
@@ -44,11 +49,24 @@ export default function EditEditorPage() {
         setSeriesOrder(p.seriesOrder != null ? String(p.seriesOrder) : '')
         setTags(Array.isArray(p.tags) ? p.tags : [])
         setSummary(p.summary ?? '')
+        try {
+          const ol = typeof p.outline === 'string' ? JSON.parse(p.outline) : p.outline
+          setOutline(Array.isArray(ol) ? ol.filter((x: unknown) => typeof x === 'string') : [])
+        } catch {
+          setOutline([])
+        }
         setStatus(p.status)
         setLoading(false)
       })
       .catch(() => { setError('加载文章失败'); setLoading(false) })
   }, [slug])
+
+  useEffect(() => {
+    fetch(`/api/posts?seriesOptions=1&category=${encodeURIComponent(category)}`)
+      .then((r) => r.json())
+      .then((data) => setSeriesSuggestions(data.series ?? []))
+      .catch(() => setSeriesSuggestions([]))
+  }, [category])
 
   // 实时生成预览 HTML（500ms 防抖）
   useEffect(() => {
@@ -114,6 +132,7 @@ export default function EditEditorPage() {
         seriesOrder: series.trim() && seriesOrder ? parseInt(seriesOrder, 10) : null,
         tags, status,
         summary: summary || null,
+        outline,
       }),
     })
     const data = await res.json()
@@ -124,7 +143,7 @@ export default function EditEditorPage() {
       setError(data.error ?? '保存失败')
     }
     setSaving(false)
-  }, [slug, title, content, category, subcategory, series, seriesOrder, tags, status, summary])
+  }, [slug, title, content, category, subcategory, series, seriesOrder, tags, status, summary, outline])
 
   // Ctrl+S 快捷保存
   useEffect(() => {
@@ -228,9 +247,12 @@ export default function EditEditorPage() {
             <EditorSeriesFields
               series={series}
               seriesOrder={seriesOrder}
+              seriesSuggestions={seriesSuggestions}
               onSeriesChange={setSeries}
               onSeriesOrderChange={setSeriesOrder}
             />
+
+            <EditorOutlineFields items={outline} onChange={setOutline} />
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -263,12 +285,22 @@ export default function EditEditorPage() {
                 ))}
               </div>
             </div>
+
+            <EditorAttachToolbar
+              postId={slug}
+              onInsert={(md) => editorRef.current?.insertText(md)}
+            />
           </div>
         </div>
 
         {/* 右侧：编辑器 */}
         <div className="flex-1 min-w-0">
-          <MonacoEditor value={content} onChange={setContent} previewHtml={previewHtml} />
+          <MonacoEditor
+            ref={editorRef}
+            value={content}
+            onChange={setContent}
+            previewHtml={previewHtml}
+          />
         </div>
       </div>
     </div>

@@ -1,9 +1,14 @@
 // ============================================================
 // 存储服务抽象接口
 // ============================================================
+export interface UploadResult {
+  url: string
+  key: string
+}
+
 export interface StorageProvider {
-  /** 上传文件，返回访问 URL */
-  upload(buffer: Buffer, key: string, mimeType: string): Promise<string>
+  /** 上传文件，返回访问 URL 与实际存储 key */
+  upload(buffer: Buffer, key: string, mimeType: string): Promise<UploadResult>
   /** 删除文件 */
   delete(key: string): Promise<void>
   /** 获取文件访问 URL */

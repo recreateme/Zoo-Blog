@@ -2,27 +2,6 @@
 // 核心数据类型
 // ============================================================
 
-export interface Post {
-  id: string
-  title: string
-  content: string
-  summary: string | null
-  outline: string | null
-  category: string
-  subcategory: string | null
-  series: string | null
-  seriesOrder: number | null
-  wordCount: number | null
-  tags: string[]
-  status: 'DRAFT' | 'PUBLISHED'
-  readingTime: number | null
-  filePath: string | null
-  viewCount: number
-  createdAt: Date
-  updatedAt: Date
-  publishedAt: Date | null
-}
-
 export interface PostMeta {
   id: string
   title: string
@@ -51,7 +30,7 @@ export interface Attachment {
   width: number | null
   height: number | null
   postId: string | null
-  createdAt: Date
+  createdAt: Date | string
 }
 
 // ============================================================
@@ -66,62 +45,6 @@ export interface Category {
   bgColor: string     // Tailwind bg class
   icon: string        // emoji 或 icon 名称
   order: number
-}
-
-// ============================================================
-// API 请求/响应类型
-// ============================================================
-
-export interface PostListParams {
-  category?: string
-  tag?: string
-  status?: 'DRAFT' | 'PUBLISHED'
-  search?: string
-  page?: number
-  pageSize?: number
-  orderBy?: 'publishedAt' | 'createdAt' | 'updatedAt' | 'viewCount'
-  order?: 'asc' | 'desc'
-}
-
-export interface PostListResponse {
-  posts: PostMeta[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
-
-export interface CreatePostInput {
-  id: string
-  title: string
-  content: string
-  category: string
-  subcategory?: string
-  series?: string
-  seriesOrder?: number
-  tags?: string[]
-  status?: 'DRAFT' | 'PUBLISHED'
-  summary?: string
-  filePath?: string
-}
-
-export interface UpdatePostInput {
-  title?: string
-  content?: string
-  category?: string
-  subcategory?: string
-  series?: string
-  seriesOrder?: number
-  tags?: string[]
-  status?: 'DRAFT' | 'PUBLISHED'
-  summary?: string
-}
-
-export interface ApiResponse<T = unknown> {
-  success: boolean
-  data?: T
-  error?: string
-  message?: string
 }
 
 // ============================================================
@@ -176,17 +99,15 @@ export interface LLMMessage {
   content: string
 }
 
-// ============================================================
-// 仪表盘统计
-// ============================================================
+export interface AskSource {
+  postId: string
+  title: string
+  category: string
+  excerpt: string
+}
 
-export interface DashboardStats {
-  totalPosts: number
-  publishedPosts: number
-  draftPosts: number
-  totalViews: number
-  totalAttachments: number
-  postsByCategory: { category: string; count: number }[]
-  recentPosts: PostMeta[]
-  writingStreak: number
+export interface AskResponse {
+  answer: string
+  sources: AskSource[]
+  enabled: boolean
 }

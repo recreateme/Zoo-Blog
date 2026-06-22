@@ -1,16 +1,40 @@
 # ⚙️ 配置说明
 
-项目所有配置通过根目录 `.env` 文件管理。本文档逐一说明每个配置项的含义、默认值和注意事项。
+项目所有配置通过根目录 `.env` 文件管理。本文档逐一说明每个配置项的含义、默认值、Docker 与 PM2 部署下的差异，以及注意事项。
+
+**模板文件：** `cp .env.example .env`
+
+`.env` **不会**提交到 Git（已加入 `.gitignore`）。生产环境勿将密钥写入代码仓库。
 
 ---
 
-## 配置文件
+## 配置优先级
 
-```bash
-cp .env.example .env   # 从模板创建配置文件
+```
+.env.local（不提交）> .env > docker-compose environment 覆盖 > .env.example（仅模板）
 ```
 
-`.env` 文件**不会**提交到 Git（已加入 `.gitignore`）。
+本地开发可用 `.env.local` 覆盖部分项。Docker 部署时，`docker-compose.yml` 会为 `app` 容器覆盖以下变量（优先级高于 `.env` 文件）：
+
+| 变量 | 容器内值 | 说明 |
+|------|----------|------|
+| `MEILISEARCH_HOST` | `http://meilisearch:7700` | 勿在 `.env` 写容器名，否则 `npm run dev` 会失败 |
+| `QDRANT_URL` | `http://qdrant:6333` | 同上 |
+
+`.env` 中保持 `localhost` 即可同时兼容本机开发与 Docker。
+
+---
+
+## 最小必要配置
+
+| 场景 | 必须配置 |
+|------|----------|
+| 本地开发 | `ADMIN_EMAIL` + `ADMIN_PASSWORD` + `NEXTAUTH_SECRET` |
+| 生产部署 | 以上 + `NEXTAUTH_URL` + `NEXT_PUBLIC_SITE_URL` |
+| 全文搜索 | + `MEILISEARCH_HOST` + `MEILISEARCH_API_KEY`（与 compose 中 `MEILI_MASTER_KEY` 一致） |
+| AI 摘要/标签 | + 对应 Provider 的 API Key |
+| RAG 问答 | + `QDRANT_URL` + Embedding 相关 + LLM Provider |
+| rsync 自动同步 | + `SYNC_SECRET`（与本地 `.sync.env` 一致） |
 
 ---
 
@@ -20,36 +44,56 @@ cp .env.example .env   # 从模板创建配置文件
 # SQLite（默认，开发和小型生产均可用）
 DATABASE_URL="file:./prisma/dev.db"
 
+# 生产 VPS（PM2 模式，绝对路径更稳妥）
+# DATABASE_URL="file:/var/www/blog/prisma/prod.db"
+
 # PostgreSQL（数据量大或需要并发写入时迁移）
 # DATABASE_URL="postgresql://user:password@localhost:5432/knowledge_blog"
 ```
 
 **切换到 PostgreSQL：**
-1. 修改 `prisma/schema.prisma` 中的 `provider = "postgresql"`
+
+1. 修改 `prisma/schema.prisma` 中 `provider = "postgresql"`
 2. 更新 `DATABASE_URL`
 3. 执行 `npx prisma migrate dev`
 
-由于使用了 Prisma，切换数据库**不需要修改任何业务代码**。
+使用 Prisma，切换数据库**不需要修改业务代码**。
+
+Docker 方式下 `prisma/` 目录挂载到容器，`DATABASE_URL` 保持 `file:./dev.db` 即可（相对容器工作目录 `/app`）。
 
 ---
 
 ## 认证
 
 ```bash
-# 后台访问的 URL 前缀，必须与实际部署域名一致
 NEXTAUTH_URL="http://localhost:3000"          # 开发
-NEXTAUTH_URL="https://yourdomain.com"         # 生产
+NEXTAUTH_URL="https://yourdomain.com"         # 生产（必须与浏览器地址栏一致，含 https）
 
-# JWT 签名密钥，随机字符串，至少 32 位
-# 生成命令：openssl rand -base64 32
-NEXTAUTH_SECRET="your-random-secret-key"
+NEXTAUTH_SECRET="your-random-secret-key"      # openssl rand -base64 32
 
-# 管理员账号（首次使用，或数据库中无用户时的备用登录）
 ADMIN_EMAIL="admin@example.com"
 ADMIN_PASSWORD="your-secure-password"
 ```
 
-> **安全提示**：生产环境务必使用强密码和随机 Secret。一旦设置好数据库中的用户账号，可以将 `ADMIN_EMAIL` 和 `ADMIN_PASSWORD` 留空。
+> **安全提示**：生产环境使用强密码和随机 Secret。数据库中已有用户后，可将 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 留空。
+
+---
+
+## 站点信息（品牌化）
+
+默认站点名 **PLAIN MLOG**，首页导航为「所有内容」，逻辑集中在 `lib/site.ts`。
+
+```bash
+NEXT_PUBLIC_SITE_URL="https://yourdomain.com"
+NEXT_PUBLIC_SITE_NAME="PLAIN MLOG"
+NEXT_PUBLIC_SITE_DESCRIPTION="学习笔记与技术沉淀"
+NEXT_PUBLIC_SITE_AUTHOR="Your Name"
+
+# 文章页「编辑此页」链到 GitHub 仓库中的 Markdown（可选）
+# NEXT_PUBLIC_CONTENT_GITHUB_URL="https://github.com/user/repo/blob/main/content"
+```
+
+以 `NEXT_PUBLIC_` 开头的变量会暴露到浏览器，用于标题、RSS、Open Graph 等。
 
 ---
 
@@ -58,51 +102,41 @@ ADMIN_PASSWORD="your-secure-password"
 ### 提供商选择
 
 ```bash
-# 当前使用的 LLM 提供商
-# 可选值：claude | openai | deepseek | ollama
-LLM_PROVIDER="claude"
+LLM_PROVIDER="claude"   # claude | openai | deepseek | ollama | openrouter
 ```
 
-### Claude（Anthropic）
+| Provider | 主要变量 | 用途 |
+|----------|----------|------|
+| Claude | `ANTHROPIC_API_KEY` | 摘要、标签、RAG 回答 |
+| OpenAI | `OPENAI_API_KEY`, `OPENAI_MODEL` | 同上 |
+| OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | 一个 Key 调多家模型 |
+| DeepSeek | `DEEPSEEK_API_KEY` | 低价 OpenAI 兼容 |
+| Ollama | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | 本地离线模型 |
+
+### OpenRouter 示例（LLM + Embedding）
 
 ```bash
-ANTHROPIC_API_KEY="sk-ant-xxxxxxxxxxxxxxxxxxxx"
+LLM_PROVIDER="openrouter"
+OPENROUTER_API_KEY="sk-or-v1-..."
+OPENROUTER_MODEL="anthropic/claude-3.5-sonnet"
+
+EMBEDDING_PROVIDER="openai"
+EMBEDDING_API_KEY="sk-or-v1-..."                    # 可与 OPENROUTER_API_KEY 相同
+EMBEDDING_BASE_URL="https://openrouter.ai/api/v1"
+EMBEDDING_MODEL="openai/text-embedding-3-small"
+EMBEDDING_DIMENSION="1536"
 ```
 
-获取 API Key：https://console.anthropic.com/
-
-计费参考：摘要和标签生成使用 `claude-haiku`，每篇文章约消耗 $0.001~$0.003。
-
-### OpenAI
-
-```bash
-LLM_PROVIDER="openai"
-OPENAI_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"
-OPENAI_BASE_URL="https://api.openai.com/v1"   # 默认值，可改为代理地址
-OPENAI_MODEL="gpt-4o-mini"                    # 默认模型
-```
-
-### DeepSeek
-
-```bash
-LLM_PROVIDER="deepseek"
-DEEPSEEK_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"
-```
-
-DeepSeek 兼容 OpenAI API 格式，价格更低。
-
-### Ollama（本地模型）
+### Ollama 本地
 
 ```bash
 LLM_PROVIDER="ollama"
-OLLAMA_BASE_URL="http://localhost:11434"    # Ollama 服务地址
-OLLAMA_MODEL="qwen2.5:7b"                  # 使用的模型名
-```
+OLLAMA_BASE_URL="http://localhost:11434"
+OLLAMA_MODEL="qwen2.5:7b"
 
-需要先在本机或服务器安装并运行 Ollama：
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen2.5:7b
+EMBEDDING_PROVIDER="ollama"
+EMBEDDING_MODEL="nomic-embed-text"
+EMBEDDING_DIMENSION="768"
 ```
 
 ---
@@ -110,135 +144,180 @@ ollama pull qwen2.5:7b
 ## 文件存储
 
 ```bash
-# 存储提供商：local | minio | s3 | oss
-STORAGE_PROVIDER="local"
-
-# 本地存储路径（相对于项目根目录）
+STORAGE_PROVIDER="local"      # local | minio | s3
 UPLOAD_DIR="./public/uploads"
-
-# 单文件最大大小（字节）
-MAX_FILE_SIZE="10485760"   # 10MB
+MAX_FILE_SIZE="10485760"      # 10MB
 ```
 
-### MinIO（自托管对象存储）
+### MinIO（Docker profile: storage）
 
 ```bash
 STORAGE_PROVIDER="minio"
-MINIO_ENDPOINT="localhost"
+MINIO_ENDPOINT="localhost"    # Docker 内改为 minio
 MINIO_PORT="9000"
 MINIO_ACCESS_KEY="minioadmin"
 MINIO_SECRET_KEY="minioadmin"
 MINIO_BUCKET="knowledge-blog"
+MINIO_PUBLIC_URL="http://localhost:9000/knowledge-blog"
 ```
 
-MinIO 部署：
 ```bash
-docker run -d \
-  -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin \
-  -v ~/minio-data:/data \
-  minio/minio server /data --console-address ":9001"
-```
-
-### AWS S3
-
-```bash
-STORAGE_PROVIDER="s3"
-AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
-AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-AWS_REGION="us-east-1"
-S3_BUCKET="knowledge-blog"
+docker compose --profile storage up -d minio
+# 控制台 http://localhost:9001
 ```
 
 ---
 
-## 搜索（Phase 2）
+## 搜索（Meilisearch）
 
-Phase 1 默认使用 SQLite `contains` 模糊搜索。
-
-接入 Meilisearch（推荐）：
+未配置时自动回退 SQLite `contains` 模糊搜索（中文体验较弱）。
 
 ```bash
 MEILISEARCH_HOST="http://localhost:7700"
-MEILISEARCH_API_KEY="local-dev-master-key-16b"   # 与 docker-compose 中 MEILI_MASTER_KEY 一致
+MEILISEARCH_API_KEY="local-dev-master-key-16b"
 ```
 
-启动 Meilisearch 后，在后台「设置 → 从文件系统同步」会重建搜索索引。后台编辑/删除文章也会自动更新索引。未配置时自动回退 SQLite。
+`docker-compose.yml` 中：
+
+```yaml
+MEILI_MASTER_KEY=${MEILISEARCH_API_KEY:-local-dev-master-key-16b}
+```
+
+**索引维护：**
+
+- 后台「设置 → 从文件系统同步」会重建搜索索引
+- 后台编辑/删除文章自动增量更新
+- CLI：`npm run search:reindex`
 
 ---
 
-## 向量数据库（Phase 3 RAG）
+## 向量数据库与 RAG（Qdrant）
 
 ```bash
 QDRANT_URL="http://localhost:6333"
-QDRANT_API_KEY=""   # 本地部署可留空
+QDRANT_API_KEY=""             # 本地可留空
+
+# 问答接口默认需登录
+ASK_PUBLIC="false"
+
+# 向量检索最低相关度（Cosine 0~1）
+VECTOR_MIN_SCORE="0.35"
 ```
 
 启动 Qdrant：
+
 ```bash
-docker compose up -d qdrant
+docker compose --profile rag up -d qdrant
 ```
+
+**Embedding：**
+
+```bash
+EMBEDDING_PROVIDER="openai"
+EMBEDDING_MODEL="text-embedding-3-small"
+EMBEDDING_DIMENSION="1536"
+# EMBEDDING_API_KEY=""        # 默认可复用 OPENAI_API_KEY 或 OPENROUTER_API_KEY
+# EMBEDDING_BASE_URL=""
+```
+
+**向量重建：**
+
+```bash
+npm run rag:reindex
+# 或 POST /api/vector/reindex（需管理员登录）
+```
+
+切换 `EMBEDDING_MODEL` / `EMBEDDING_DIMENSION` 后必须全量重建索引。
+
+同步与后台 CRUD 会自动增量更新向量；失败信息写入 `indexErrors` 字段。
 
 ---
 
-## 内容目录
+## 内容同步
 
 ```bash
-# Markdown 文件目录（相对于项目根目录）
 CONTENT_DIR="./content"
+
+# rsync 脚本调用 /api/sync 的共享密钥（≥32 字符随机串）
+SYNC_SECRET="your-random-sync-secret-min-32-chars"
 ```
 
----
+本地 `.sync.env`（不提交）需配置相同 `SYNC_SECRET`。并发同步冲突时 API 返回 **409**。
 
-## 站点信息
+可选附件同步：`.sync.env` 中 `SYNC_UPLOADS=true`，并配置 `LOCAL_UPLOADS_DIR` / `VPS_UPLOADS_DIR`。
 
-以 `NEXT_PUBLIC_` 开头的变量会暴露到浏览器端，其余变量仅在服务端可用。
+脚本路径：
 
-```bash
-# 完整站点 URL（用于 sitemap、RSS、OpenGraph）
-NEXT_PUBLIC_SITE_URL="https://yourdomain.com"
-
-# 站点名称（显示在标题栏、导航栏）
-NEXT_PUBLIC_SITE_NAME="个人知识库"
-
-# 站点描述（用于 SEO meta description）
-NEXT_PUBLIC_SITE_DESCRIPTION="我的学习笔记与知识积累"
-
-# 作者名（用于 RSS、版权信息）
-NEXT_PUBLIC_SITE_AUTHOR="Your Name"
-```
+- Linux/macOS：`scripts/sync-local.sh`
+- Windows：`scripts/sync-local.ps1`
 
 ---
 
 ## Git 备份（可选）
 
 ```bash
-# 备份推送的 Git 远程仓库地址
 GIT_REMOTE_URL="git@github.com:yourname/knowledge-blog-content.git"
 ```
 
-如果设置了此项，备份脚本会在每次执行时将内容推送到远程仓库。
+`scripts/backup.sh` 会将 `content/` 与数据库备份提交并 push（如已配置远程）。
 
 ---
 
-## 配置优先级
+## Docker Compose 环境变量对照
 
-当同一配置项在多处定义时，优先级为：
+| 服务 | 镜像 | Profile | 端口映射 |
+|------|------|---------|----------|
+| app | 自建 Dockerfile | 默认 | `3000:3000` |
+| meilisearch | getmeili/meilisearch:v1.9 | 默认 | `127.0.0.1:7700:7700` |
+| qdrant | qdrant/qdrant:v1.11.0 | `rag` | `127.0.0.1:6333:6333` |
+| minio | minio/minio:latest | `storage` | `9000`, `9001` |
 
+**常用启动组合：**
+
+```bash
+docker compose up -d --build                           # app + meilisearch
+docker compose --profile rag up -d --build             # + qdrant
+docker compose --profile storage --profile rag up -d   # + minio
 ```
-.env.local（不提交）> .env（提交）> .env.example（模板）
-```
-
-生产环境推荐只维护 `.env` 文件，本地开发使用 `.env.local` 覆盖部分配置。
 
 ---
 
-## 最小必要配置汇总
+## 知识图谱相关
 
-| 场景 | 必须配置 |
-|------|----------|
-| 本地开发 | `ADMIN_EMAIL` + `ADMIN_PASSWORD` + `NEXTAUTH_SECRET` |
-| 生产部署 | 以上三项 + `NEXTAUTH_URL` + `NEXT_PUBLIC_SITE_URL` |
-| 启用 AI | 以上 + `ANTHROPIC_API_KEY`（或对应提供商的 Key） |
-| 启用备份 | 以上 + `GIT_REMOTE_URL` |
+图谱数据来自已发布笔记，**无需单独配置**。相关 API：
+
+```
+GET /api/graph?view=links     # 笔记双向链接（默认）
+GET /api/graph?view=tags      # 标签共现
+GET /api/graph?view=timeline  # 按月累积时间演化
+```
+
+筛选在客户端完成（分类 / 专题 / 隐藏孤立节点），不持久化到 URL（0.4.2）。
+
+图谱依赖：
+
+- **笔记链接视图**：`PostLink` 表（由 `[[wiki links]]` 同步生成）
+- **标签视图**：笔记 `tags` 字段共现
+- **时间演化**：`publishedAt` 按月切片
+
+---
+
+## 主题
+
+前台支持 5 套主题（`classic` / `dark` / `eye` / `parchment` / `ink`），用户选择保存在浏览器 `localStorage`（`knowledge-blog-theme`）。后台 Monaco 编辑器随 `data-theme` 切换 `vs` / `vs-dark`。
+
+无需环境变量配置。
+
+---
+
+## 故障排查速查
+
+| 现象 | 检查项 |
+|------|--------|
+| 搜索无结果 | Meilisearch 是否运行；后台是否重建索引 |
+| /ask 报错 | Qdrant、Embedding API、LLM API；`ASK_PUBLIC` 与登录状态 |
+| Docker 内搜索失败 | `MEILISEARCH_HOST` 是否被 compose 覆盖为 `meilisearch:7700` |
+| 同步 401/403 | `SYNC_SECRET` 是否与 `.sync.env` 一致 |
+| 图谱为空 | 是否有已发布笔记；链接视图需 `[[双向链接]]` 且已同步 |
+
+更多见 [运维手册](OPERATIONS.md)。

@@ -1,9 +1,8 @@
 export default function PostLoading() {
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-      <div className="flex gap-12">
-        {/* 文章主体骨架 */}
-        <div className="flex-1 min-w-0">
+    <div className="post-page">
+      <div className="post-layout">
+        <div className="post-article">
           {/* 返回按钮 */}
           <div className="skeleton h-4 w-24 rounded mb-6" />
 
@@ -40,7 +39,7 @@ export default function PostLoading() {
         </div>
 
         {/* TOC 骨架 */}
-        <div className="hidden xl:block w-56 shrink-0 space-y-2">
+        <div className="post-sidebar space-y-2">
           <div className="skeleton h-3 w-12 rounded mb-3" />
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="skeleton h-3 rounded" style={{ width: `${50 + i * 8}%` }} />

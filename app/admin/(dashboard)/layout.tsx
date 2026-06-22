@@ -12,7 +12,7 @@ export default async function AdminDashboardLayout({
   if (!session) redirect('/admin/login')
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'color-mix(in srgb, var(--bg-base) 94%, transparent)' }}>
+    <div className="admin-shell">
       <AdminSidebar />
       <main className="flex-1 min-w-0 overflow-auto">{children}</main>
     </div>

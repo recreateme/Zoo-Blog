@@ -1,9 +1,11 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
+import { useTheme } from 'next-themes'
 import { Loader2, Split, Eye, Code2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { editor as MonacoEditorType } from 'monaco-editor'
 
 const MonacoEditorLib = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
@@ -21,13 +23,47 @@ interface MonacoEditorProps {
   height?: string
 }
 
-type ViewMode = 'editor' | 'preview' | 'split'
+export interface MonacoEditorHandle {
+  insertText: (text: string) => void
+}
 
-export default function MonacoEditor({ value, onChange, previewHtml, height = '100%' }: MonacoEditorProps) {
+const MonacoEditor = forwardRef<MonacoEditorHandle, MonacoEditorProps>(function MonacoEditor(
+  { value, onChange, previewHtml, height = '100%' },
+  ref
+) {
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('split')
-  const editorRef = useRef<unknown>(null)
+  const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null)
 
-  const handleMount = useCallback((editor: unknown) => {
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const monacoTheme = mounted && resolvedTheme === 'dark' ? 'vs-dark' : 'vs'
+
+  const insertText = useCallback((text: string) => {
+    const editor = editorRef.current
+    if (!editor) {
+      onChange(value + text)
+      return
+    }
+    const selection = editor.getSelection()
+    const model = editor.getModel()
+    if (!selection || !model) return
+    editor.executeEdits('insert-attachment', [
+      {
+        range: selection,
+        text,
+        forceMoveMarkers: true,
+      },
+    ])
+    editor.focus()
+  }, [onChange, value])
+
+  useImperativeHandle(ref, () => ({ insertText }), [insertText])
+
+  const handleMount = useCallback((editor: MonacoEditorType.IStandaloneCodeEditor) => {
     editorRef.current = editor
   }, [])
 
@@ -39,18 +75,13 @@ export default function MonacoEditor({ value, onChange, previewHtml, height = '1
 
   return (
     <div className="flex flex-col h-full">
-      {/* 工具栏 */}
-      <div
-        className="flex items-center justify-between px-3 py-1.5 border-b shrink-0"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
-      >
-        <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="admin-editor-toolbar">
+        <div className="flex items-center gap-1 text-xs text-meta">
           <span>Markdown</span>
           <span className="mx-1.5">·</span>
           <span>{value.length} 字符</span>
         </div>
 
-        {/* 视图切换 */}
         <div
           className="flex rounded-md overflow-hidden"
           style={{ border: '1px solid var(--border-default)' }}
@@ -78,11 +109,10 @@ export default function MonacoEditor({ value, onChange, previewHtml, height = '1
         </div>
       </div>
 
-      {/* 编辑/预览区 */}
       <div className="flex flex-1 min-h-0" style={{ height }}>
-        {/* 编辑器 */}
         {(viewMode === 'editor' || viewMode === 'split') && (
-          <div className={cn('flex-1 min-w-0', viewMode === 'split' && 'border-r')}
+          <div
+            className={cn('flex-1 min-w-0', viewMode === 'split' && 'border-r')}
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <MonacoEditorLib
@@ -90,6 +120,7 @@ export default function MonacoEditor({ value, onChange, previewHtml, height = '1
               value={value}
               onChange={(v) => onChange(v ?? '')}
               onMount={handleMount}
+              theme={monacoTheme}
               options={{
                 fontSize: 14,
                 fontFamily: "'JetBrains Mono', monospace",
@@ -106,12 +137,10 @@ export default function MonacoEditor({ value, onChange, previewHtml, height = '1
                 quickSuggestions: false,
                 tabSize: 2,
               }}
-              theme="vs"
             />
           </div>
         )}
 
-        {/* 预览 */}
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div
             className="flex-1 min-w-0 overflow-auto"
@@ -123,10 +152,7 @@ export default function MonacoEditor({ value, onChange, previewHtml, height = '1
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
             ) : (
-              <div
-                className="flex items-center justify-center h-full text-sm"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
+              <div className="flex items-center justify-center h-full text-sm text-lead">
                 预览将在保存后刷新
               </div>
             )}
@@ -135,4 +161,8 @@ export default function MonacoEditor({ value, onChange, previewHtml, height = '1
       </div>
     </div>
   )
-}
+})
+
+export default MonacoEditor
+
+type ViewMode = 'editor' | 'preview' | 'split'

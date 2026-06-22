@@ -3,17 +3,21 @@ import { ThemeProvider } from 'next-themes'
 import Providers from '@/components/providers'
 import SiteShell from '@/components/layout/SiteShell'
 import { SITE_THEME_IDS } from '@/lib/themes'
+import { getSiteName, getSiteDescription } from '@/lib/site'
 import './globals.css'
+
+const siteName = getSiteName()
+const siteDescription = getSiteDescription()
 
 export const metadata: Metadata = {
   title: {
-    template: `%s · ${process.env.NEXT_PUBLIC_SITE_NAME ?? '个人知识库'}`,
-    default: process.env.NEXT_PUBLIC_SITE_NAME ?? '个人知识库',
+    template: `%s · ${siteName}`,
+    default: siteName,
   },
-  description: process.env.NEXT_PUBLIC_SITE_DESCRIPTION ?? '我的学习笔记与知识积累',
+  description: siteDescription,
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   openGraph: {
-    siteName: process.env.NEXT_PUBLIC_SITE_NAME ?? '个人知识库',
+    siteName,
     locale: 'zh_CN',
     type: 'website',
   },

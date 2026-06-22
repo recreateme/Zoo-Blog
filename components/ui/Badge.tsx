@@ -12,7 +12,7 @@ export default function Badge({ children, className, variant = 'default', catego
   if (variant === 'category' && categoryId) {
     const cat = CATEGORY_MAP[categoryId]
     return (
-      <span className={cn('badge', cat?.color, cat?.bgColor, className)}>
+      <span className={cn('badge', 'badge-category', `badge-cat-${categoryId}`, className)}>
         {cat?.icon && <span>{cat.icon}</span>}
         {children}
       </span>
@@ -20,40 +20,20 @@ export default function Badge({ children, className, variant = 'default', catego
   }
 
   if (variant === 'tag') {
-    return (
-      <span
-        className={cn('badge', className)}
-        style={{
-          background: 'var(--bg-surface)',
-          color: 'var(--text-secondary)',
-          border: '1px solid var(--border-subtle)',
-        }}
-      >
-        #{children}
-      </span>
-    )
+    return <span className={cn('badge', 'badge-tag', className)}>#{children}</span>
   }
 
   if (variant === 'status') {
     const isDraft = children === 'DRAFT' || children === '草稿'
     return (
-      <span
-        className={cn('badge', className)}
-        style={{
-          background: isDraft ? 'var(--bg-sunken)' : '#dcfce7',
-          color: isDraft ? 'var(--text-tertiary)' : '#16a34a',
-        }}
-      >
+      <span className={cn('badge', isDraft ? 'badge-status-draft' : 'badge-status-published', className)}>
         {isDraft ? '草稿' : '已发布'}
       </span>
     )
   }
 
   return (
-    <span
-      className={cn('badge', className)}
-      style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
-    >
+    <span className={cn('badge', className)} style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
       {children}
     </span>
   )

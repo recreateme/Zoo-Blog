@@ -4,6 +4,13 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { parseTags, stringifyTags, computePostStats } from '@/lib/utils'
 import { indexPostById, removePostFromIndex } from '@/lib/search-index'
+import {
+  indexPostById as indexPostVectors,
+  removePostVectors,
+} from '@/lib/vector-index'
+import { deleteBoundMarkdownFile } from '@/lib/content-source'
+import { revalidatePublishedContent } from '@/lib/revalidate-content'
+import { syncPostLinksForContent, buildWikiSlugMap, removePostLinksForIds } from '@/lib/wiki-links'
 import { z } from 'zod'
 
 const UpdatePostSchema = z.object({
@@ -16,6 +23,7 @@ const UpdatePostSchema = z.object({
   tags: z.array(z.string()).optional(),
   status: z.enum(['DRAFT', 'PUBLISHED']).optional(),
   summary: z.string().nullable().optional(),
+  outline: z.array(z.string()).optional(),
 })
 
 // GET /api/posts/[slug]
@@ -74,6 +82,7 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
         ...(data.tags !== undefined && { tags: stringifyTags(data.tags) }),
         ...(data.status && { status: data.status }),
         ...(data.summary !== undefined && { summary: data.summary }),
+        ...(data.outline !== undefined && { outline: JSON.stringify(data.outline) }),
         readingTime,
         wordCount,
         publishedAt,
@@ -82,8 +91,26 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
 
     try {
       await indexPostById(updated.id)
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.warn(`搜索索引更新失败 (${updated.id}):`, err)
+    }
+
+    try {
+      await indexPostVectors(updated.id)
+    } catch (err) {
+      console.warn(`向量索引更新失败 (${updated.id}):`, err)
+    }
+
+    if (updated.status === 'PUBLISHED' || existing.status === 'PUBLISHED') {
+      revalidatePublishedContent({ postIds: [updated.id] })
+      if (updated.status === 'PUBLISHED') {
+        try {
+          const slugMap = await buildWikiSlugMap()
+          await syncPostLinksForContent(updated.id, updated.content, slugMap)
+        } catch (err) {
+          console.warn(`双向链接同步失败 (${updated.id}):`, err)
+        }
+      }
     }
 
     return NextResponse.json({ success: true, post: { ...updated, tags: parseTags(updated.tags) } })
@@ -96,19 +123,45 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
   }
 }
 
-// DELETE /api/posts/[slug]
+// DELETE /api/posts/[slug]?deleteFile=1 同时删除 content/ 下绑定的 MD
 export async function DELETE(req: NextRequest, { params }: { params: { slug: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: '未授权' }, { status: 401 })
 
+  const deleteFile = req.nextUrl.searchParams.get('deleteFile') === '1'
+
   try {
+    const existing = await prisma.post.findUnique({ where: { id: params.slug } })
+    if (!existing) return NextResponse.json({ error: '文章不存在' }, { status: 404 })
+
+    let fileDeleted = false
+    if (deleteFile && existing.filePath) {
+      fileDeleted = await deleteBoundMarkdownFile(existing.filePath)
+    }
+
     await prisma.post.delete({ where: { id: params.slug } })
     try {
       await removePostFromIndex(params.slug)
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.warn(`搜索索引删除失败 (${params.slug}):`, err)
     }
-    return NextResponse.json({ success: true })
+
+    try {
+      await removePostVectors(params.slug)
+    } catch (err) {
+      console.warn(`向量索引删除失败 (${params.slug}):`, err)
+    }
+
+    if (existing.status === 'PUBLISHED') {
+      revalidatePublishedContent({ removedIds: [params.slug] })
+    }
+    await removePostLinksForIds([params.slug])
+
+    return NextResponse.json({
+      success: true,
+      fileDeleted,
+      hadFilePath: !!existing.filePath,
+    })
   } catch {
     return NextResponse.json({ error: '删除失败' }, { status: 500 })
   }

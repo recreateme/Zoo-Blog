@@ -1,9 +1,10 @@
 import fs from 'fs/promises'
 import path from 'path'
+import crypto from 'crypto'
 import { parseFrontmatter, extractPostMeta } from '@/lib/markdown'
 import { stringifyTags } from '@/lib/utils'
 import prisma from '@/lib/db'
-import { indexPostById, removePostFromIndex } from '@/lib/search-index'
+import { syncPostLinksBatch, removePostLinksForIds } from '@/lib/wiki-links'
 
 const CONTENT_DIR = process.env.CONTENT_DIR ?? './content'
 
@@ -12,8 +13,12 @@ export interface SyncResult {
   updated: number
   skipped: number
   deleted: number
-  indexed: number
   errors: string[]
+  indexErrors: string[]
+  /** 新增或更新的文章 ID，供增量索引 */
+  changedIds: string[]
+  /** 已删除的文章 ID */
+  removedIds: string[]
 }
 
 export interface SyncStatus {
@@ -21,6 +26,7 @@ export interface SyncStatus {
   dbPostCount: number
   fileBoundCount: number
   orphanCount: number
+  parseErrorCount: number
   contentDir: string
 }
 
@@ -47,25 +53,113 @@ export async function collectMarkdownFiles(dir: string): Promise<string[]> {
   return results
 }
 
-/** 扫描文件系统，返回当前 MD 相对路径集合与 path → slug 映射 */
-async function scanContentFiles(contentDir: string) {
-  const mdFiles = await collectMarkdownFiles(contentDir)
-  const relPaths = new Set<string>()
+/** 磁盘上所有 MD 的相对路径（不要求解析成功） */
+function buildDiskRelPaths(contentDir: string, mdFiles: string[]): Set<string> {
+  return new Set(mdFiles.map((fp) => normalizeRelPath(contentDir, fp)))
+}
+
+/** 成功解析的文件 path → slug */
+async function buildPathToId(
+  contentDir: string,
+  mdFiles: string[]
+): Promise<{ pathToId: Map<string, string>; parseErrorCount: number }> {
   const pathToId = new Map<string, string>()
+  let parseErrorCount = 0
 
   for (const filePath of mdFiles) {
     try {
       const raw = await fs.readFile(filePath, 'utf-8')
       const relPath = normalizeRelPath(contentDir, filePath)
       const meta = extractPostMeta(raw, relPath)
-      relPaths.add(relPath)
       pathToId.set(relPath, meta.id)
     } catch {
-      // 解析失败的文件不参与映射，同步阶段会报错
+      parseErrorCount++
     }
   }
 
-  return { mdFiles, relPaths, pathToId }
+  return { pathToId, parseErrorCount }
+}
+
+/**
+ * 判断是否应删除 filePath 绑定的 DB 记录：
+ * - 文件已从磁盘移除
+ * - 同路径 slug 已变更（且新 slug 已成功解析）
+ * 解析失败但文件仍在 → 不删除
+ */
+export function shouldDeleteFileBoundPost(
+  filePath: string,
+  postId: string,
+  diskRelPaths: Set<string>,
+  pathToId: Map<string, string>
+): boolean {
+  if (!diskRelPaths.has(filePath)) return true
+  const expectedId = pathToId.get(filePath)
+  return expectedId !== undefined && expectedId !== postId
+}
+
+export function countOrphanPostsWithIds(
+  fileBoundPosts: { id: string; filePath: string | null }[],
+  diskRelPaths: Set<string>,
+  pathToId: Map<string, string>
+): number {
+  return fileBoundPosts.filter((p) => {
+    const fp = p.filePath
+    if (!fp) return false
+    return shouldDeleteFileBoundPost(fp, p.id, diskRelPaths, pathToId)
+  }).length
+}
+
+/** 同步指纹：内容或元数据变更时更新 DB */
+function buildSyncFingerprint(data: {
+  content: string
+  title: string
+  category: string
+  subcategory: string | null
+  tags: string
+  status: string
+  summary: string | null
+  outline: string
+  series: string | null
+  seriesOrder: number | null
+}): string {
+  return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex')
+}
+
+function fingerprintFromMeta(
+  meta: ReturnType<typeof extractPostMeta>,
+  content: string,
+  outlineJson: string,
+  tags: string
+): string {
+  return buildSyncFingerprint({
+    content,
+    title: meta.title,
+    category: meta.category,
+    subcategory: meta.subcategory,
+    tags,
+    status: meta.status,
+    summary: meta.summary,
+    outline: outlineJson,
+    series: meta.series,
+    seriesOrder: meta.seriesOrder,
+  })
+}
+
+function fingerprintFromPost(
+  post: {
+    content: string
+    title: string
+    category: string
+    subcategory: string | null
+    tags: string
+    status: string
+    summary: string | null
+    outline: string
+    series: string | null
+    seriesOrder: number | null
+  }
+): string {
+  return buildSyncFingerprint(post)
 }
 
 /**
@@ -74,27 +168,32 @@ async function scanContentFiles(contentDir: string) {
  * - 已绑定 filePath 的笔记在文件更新时覆盖数据库
  * - 文件已删除 → 删除对应 DB 记录
  * - 同文件 slug 变更 → 删除旧 slug 记录
+ * - 解析失败但文件仍在 → 保留 DB，记入 errors
  * - 纯后台创建（无 filePath）的记录永不覆盖或删除
  */
 export async function runContentSync(): Promise<SyncResult> {
   const contentDir = path.resolve(CONTENT_DIR)
-  const { mdFiles, relPaths, pathToId } = await scanContentFiles(contentDir)
+  const mdFiles = await collectMarkdownFiles(contentDir)
+  const diskRelPaths = buildDiskRelPaths(contentDir, mdFiles)
+  const { pathToId } = await buildPathToId(contentDir, mdFiles)
 
   let added = 0
   let updated = 0
   let skipped = 0
   let deleted = 0
-  let indexed = 0
   const errors: string[] = []
+  const indexErrors: string[] = []
+  const changedIds: string[] = []
+  const removedIds: string[] = []
 
   for (const filePath of mdFiles) {
     try {
       const raw = await fs.readFile(filePath, 'utf-8')
-      const stat = await fs.stat(filePath)
       const relPath = normalizeRelPath(contentDir, filePath)
       const meta = extractPostMeta(raw, relPath)
       const { content } = parseFrontmatter(raw)
       const outlineJson = JSON.stringify(meta.outline)
+      const tagsJson = stringifyTags(meta.tags)
 
       const existing = await prisma.post.findUnique({ where: { id: meta.id } })
 
@@ -106,7 +205,7 @@ export async function runContentSync(): Promise<SyncResult> {
             content,
             category: meta.category,
             subcategory: meta.subcategory,
-            tags: stringifyTags(meta.tags),
+            tags: tagsJson,
             status: meta.status,
             summary: meta.summary,
             outline: outlineJson,
@@ -119,12 +218,7 @@ export async function runContentSync(): Promise<SyncResult> {
           },
         })
         added++
-        try {
-          await indexPostById(meta.id)
-          indexed++
-        } catch {
-          /* 索引失败不阻断同步 */
-        }
+        changedIds.push(meta.id)
         continue
       }
 
@@ -133,7 +227,11 @@ export async function runContentSync(): Promise<SyncResult> {
         continue
       }
 
-      if (stat.mtimeMs <= existing.updatedAt.getTime()) {
+      const pathChanged = existing.filePath !== relPath
+      const fileFp = fingerprintFromMeta(meta, content, outlineJson, tagsJson)
+      const dbFp = fingerprintFromPost(existing)
+
+      if (!pathChanged && fileFp === dbFp) {
         skipped++
         continue
       }
@@ -145,7 +243,7 @@ export async function runContentSync(): Promise<SyncResult> {
           content,
           category: meta.category,
           subcategory: meta.subcategory,
-          tags: stringifyTags(meta.tags),
+          tags: tagsJson,
           status: meta.status,
           summary: meta.summary,
           outline: outlineJson,
@@ -158,59 +256,60 @@ export async function runContentSync(): Promise<SyncResult> {
         },
       })
       updated++
-      try {
-        await indexPostById(meta.id)
-        indexed++
-      } catch {
-        /* ignore */
-      }
+      changedIds.push(meta.id)
     } catch (err) {
       errors.push(`${filePath}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
-  // 删除：文件已移除，或同路径 slug 已变更
   const fileBoundPosts = await prisma.post.findMany({
     where: { filePath: { not: null } },
     select: { id: true, filePath: true },
   })
 
-  for (const post of fileBoundPosts) {
-    const fp = post.filePath!
-    const shouldDelete =
-      !relPaths.has(fp) || pathToId.get(fp) !== post.id
+  const toDelete = fileBoundPosts.filter((post) =>
+    shouldDeleteFileBoundPost(post.filePath!, post.id, diskRelPaths, pathToId)
+  )
 
-    if (shouldDelete) {
-      await prisma.post.delete({ where: { id: post.id } })
-      deleted++
-      try {
-        await removePostFromIndex(post.id)
-      } catch {
-        /* ignore */
-      }
+  if (toDelete.length > 0) {
+    await prisma.$transaction(
+      toDelete.map((post) => prisma.post.delete({ where: { id: post.id } }))
+    )
+    deleted = toDelete.length
+    removedIds.push(...toDelete.map((p) => p.id))
+  }
+
+  await removePostLinksForIds(removedIds)
+  if (changedIds.length > 0) {
+    try {
+      await syncPostLinksBatch(changedIds)
+    } catch (err) {
+      errors.push(`双向链接同步失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
-  return { added, updated, skipped, deleted, indexed, errors }
+  return { added, updated, skipped, deleted, errors, indexErrors, changedIds, removedIds }
 }
 
 export async function getContentSyncStatus(): Promise<SyncStatus> {
   const contentDir = path.resolve(CONTENT_DIR)
-  const { relPaths } = await scanContentFiles(contentDir)
   const mdFiles = await collectMarkdownFiles(contentDir)
+  const diskRelPaths = buildDiskRelPaths(contentDir, mdFiles)
+  const { pathToId, parseErrorCount } = await buildPathToId(contentDir, mdFiles)
 
   const fileBoundPosts = await prisma.post.findMany({
     where: { filePath: { not: null } },
-    select: { filePath: true },
+    select: { id: true, filePath: true },
   })
 
-  const orphanCount = fileBoundPosts.filter((p) => !relPaths.has(p.filePath!)).length
+  const orphanCount = countOrphanPostsWithIds(fileBoundPosts, diskRelPaths, pathToId)
 
   return {
     contentFileCount: mdFiles.length,
     dbPostCount: await prisma.post.count(),
     fileBoundCount: fileBoundPosts.length,
     orphanCount,
+    parseErrorCount,
     contentDir: CONTENT_DIR,
   }
 }

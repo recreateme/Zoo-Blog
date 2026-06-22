@@ -2,30 +2,65 @@ import type { LLMProvider } from './provider'
 import { estimateReadingTime } from './provider'
 import type { LLMMessage, AiSummaryResult, AiTagsResult } from '@/types'
 
+export interface OpenAIProviderConfig {
+  apiKey?: string
+  baseUrl?: string
+  model?: string
+  extraHeaders?: Record<string, string>
+}
+
 export class OpenAIProvider implements LLMProvider {
   private baseUrl: string
   private apiKey: string
   private model: string
+  private extraHeaders: Record<string, string>
 
-  constructor() {
-    this.apiKey = process.env.OPENAI_API_KEY ?? ''
-    this.baseUrl = process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
-    this.model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
+  constructor(config?: OpenAIProviderConfig) {
+    this.apiKey = config?.apiKey ?? process.env.OPENAI_API_KEY ?? ''
+    this.baseUrl = (config?.baseUrl ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(
+      /\/$/,
+      ''
+    )
+    this.model = config?.model ?? process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
+    this.extraHeaders = config?.extraHeaders ?? {}
     if (!this.apiKey) throw new Error('OPENAI_API_KEY 未配置')
+  }
+
+  private buildHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.apiKey}`,
+      ...this.extraHeaders,
+    }
+  }
+
+  private async parseChatResponse(res: Response): Promise<string> {
+    const body = await res.text()
+    if (!res.ok) {
+      throw new Error(`LLM API 错误 (${res.status}): ${body.slice(0, 300)}`)
+    }
+    let data: { choices?: { message?: { content?: string } }[] }
+    try {
+      data = JSON.parse(body) as typeof data
+    } catch {
+      throw new Error(`LLM API 返回非 JSON: ${body.slice(0, 200)}`)
+    }
+    const content = data.choices?.[0]?.message?.content
+    if (!content) throw new Error('LLM API 返回空内容')
+    return content
   }
 
   private async complete(prompt: string): Promise<string> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+      headers: this.buildHeaders(),
       body: JSON.stringify({
         model: this.model,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 512,
       }),
     })
-    const data = await res.json()
-    return data.choices?.[0]?.message?.content ?? ''
+    return this.parseChatResponse(res)
   }
 
   async summarize(content: string, title: string): Promise<AiSummaryResult> {
@@ -57,7 +92,7 @@ export class OpenAIProvider implements LLMProvider {
   async chat(messages: LLMMessage[], systemPrompt?: string): Promise<string> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+      headers: this.buildHeaders(),
       body: JSON.stringify({
         model: this.model,
         messages: [
@@ -67,7 +102,6 @@ export class OpenAIProvider implements LLMProvider {
         max_tokens: 2048,
       }),
     })
-    const data = await res.json()
-    return data.choices?.[0]?.message?.content ?? ''
+    return this.parseChatResponse(res)
   }
 }

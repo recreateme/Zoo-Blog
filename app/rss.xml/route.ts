@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { parseTags } from '@/lib/utils'
+import { getSiteName, getSiteDescription } from '@/lib/site'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-  const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? '个人知识库'
-  const siteDesc = process.env.NEXT_PUBLIC_SITE_DESCRIPTION ?? '我的学习笔记'
+  const siteName = getSiteName()
+  const siteDesc = getSiteDescription()
   const author = process.env.NEXT_PUBLIC_SITE_AUTHOR ?? 'Author'
 
   const posts = await prisma.post.findMany({

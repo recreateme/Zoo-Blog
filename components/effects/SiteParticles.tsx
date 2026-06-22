@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import Particles, { ParticlesProvider, useParticlesProvider } from '@tsparticles/react'
 import { loadSlim } from '@tsparticles/slim'
 import { useTheme } from 'next-themes'
@@ -22,6 +23,9 @@ function readParticleVars() {
 }
 
 function SiteParticlesCanvas() {
+  const pathname = usePathname()
+  const isHome = pathname === '/'
+  const isGraph = pathname === '/graph'
   const { resolvedTheme } = useTheme()
   const { loaded } = useParticlesProvider()
   const [reduceMotion, setReduceMotion] = useState(false)
@@ -58,7 +62,7 @@ function SiteParticlesCanvas() {
       fpsLimit: 60,
       particles: {
         number: {
-          value: reduceMotion ? 28 : 80,
+          value: reduceMotion ? 28 : isGraph ? 96 : isHome ? 72 : 36,
           density: { enable: true, width: 1100, height: 1100 },
         },
         color: { value: color },
@@ -116,7 +120,7 @@ function SiteParticlesCanvas() {
         },
       },
     }),
-    [color, linkColor, linkOpacity, reduceMotion]
+    [color, linkColor, linkOpacity, reduceMotion, isHome, isGraph]
   )
 
   if (!mounted) {

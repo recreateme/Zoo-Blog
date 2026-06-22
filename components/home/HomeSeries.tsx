@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { BookMarked, ChevronRight } from 'lucide-react'
-import { getSeriesCatalog } from '@/lib/series-catalog'
+import { getSeriesCatalogCached } from '@/lib/cached-queries'
 
 export default async function HomeSeries() {
-  const series = await getSeriesCatalog(6)
+  const series = await getSeriesCatalogCached(6)
   if (series.length === 0) return null
 
   return (

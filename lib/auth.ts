@@ -23,7 +23,12 @@ export const authOptions: NextAuthOptions = {
           if (user) {
             const valid = await bcrypt.compare(credentials.password, user.password)
             if (valid) {
-              return { id: user.id, email: user.email, name: user.name ?? user.email }
+              return {
+                id: user.id,
+                email: user.email,
+                name: user.name ?? user.email,
+                role: user.role,
+              }
             }
             return null
           }
@@ -40,7 +45,7 @@ export const authOptions: NextAuthOptions = {
           credentials.email === adminEmail &&
           credentials.password === adminPassword
         ) {
-          return { id: 'env-admin', email: adminEmail, name: 'Admin' }
+          return { id: 'env-admin', email: adminEmail, name: 'Admin', role: 'ADMIN' }
         }
 
         return null
@@ -54,7 +59,10 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     jwt({ token, user }) {
-      if (user) token.id = user.id as string
+      if (user) {
+        token.id = user.id as string
+        token.role = (user as { role?: string }).role ?? 'ADMIN'
+      }
       return token
     },
     session({ session, token }) {
@@ -63,6 +71,7 @@ export const authOptions: NextAuthOptions = {
         user: {
           ...session.user,
           id: token.id as string,
+          role: (token.role as string) ?? 'ADMIN',
         },
       }
     },

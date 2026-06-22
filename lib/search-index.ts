@@ -2,8 +2,11 @@ import { Meilisearch } from 'meilisearch'
 import prisma from '@/lib/db'
 import { parseTags } from '@/lib/utils'
 import type { PostMeta } from '@/types'
+import type { Prisma } from '@prisma/client'
 
 const INDEX_UID = 'posts'
+/** 正文写入索引的上限（字符），超出部分不参与 Meilisearch 检索 */
+const CONTENT_INDEX_LIMIT = 12_000
 
 export type SearchEngine = 'meilisearch' | 'sqlite'
 
@@ -36,6 +39,7 @@ export function isSearchEnabled(): boolean {
 }
 
 let client: Meilisearch | null = null
+let indexConfigured = false
 
 function getClient(): Meilisearch | null {
   if (!isSearchEnabled()) return null
@@ -77,7 +81,7 @@ function postToDocument(post: {
     id: post.id,
     title: post.title,
     summary: post.summary,
-    content: post.content.slice(0, 12_000),
+    content: post.content.slice(0, CONTENT_INDEX_LIMIT),
     category: post.category,
     subcategory: post.subcategory,
     series: post.series,
@@ -90,6 +94,7 @@ function postToDocument(post: {
 export async function ensureSearchIndex(): Promise<boolean> {
   const meili = getClient()
   if (!meili) return false
+  if (indexConfigured) return true
 
   try {
     await meili.createIndex(INDEX_UID, { primaryKey: 'id' })
@@ -114,7 +119,12 @@ export async function ensureSearchIndex(): Promise<boolean> {
     ],
   })
 
+  indexConfigured = true
   return true
+}
+
+async function waitForTask(meili: Meilisearch, taskUid: number): Promise<void> {
+  await meili.tasks.waitForTask(taskUid)
 }
 
 export async function indexPostById(id: string): Promise<void> {
@@ -129,7 +139,7 @@ export async function indexPostById(id: string): Promise<void> {
   if (post.status === 'PUBLISHED') {
     const task = await meili.index(INDEX_UID).addDocuments([postToDocument(post)])
     if (task.taskUid != null) {
-      await meili.tasks.waitForTask(task.taskUid)
+      await waitForTask(meili, task.taskUid)
     }
   } else {
     await removePostFromIndex(id)
@@ -141,29 +151,68 @@ export async function removePostFromIndex(id: string): Promise<void> {
   if (!meili) return
 
   try {
-    await meili.index(INDEX_UID).deleteDocument(id)
-  } catch {
-    // 索引不存在或文档缺失时忽略
+    const task = await meili.index(INDEX_UID).deleteDocument(id)
+    if (task.taskUid != null) {
+      await waitForTask(meili, task.taskUid)
+    }
+  } catch (err) {
+    console.warn(`Meilisearch 删除文档失败 (${id}):`, err)
   }
 }
 
+/** 全量替换索引：先清空再写入所有已发布文章 */
 export async function reindexAllPosts(): Promise<{ indexed: number }> {
   const meili = getClient()
   if (!meili) return { indexed: 0 }
 
   await ensureSearchIndex()
+  const index = meili.index(INDEX_UID)
+
+  const clearTask = await index.deleteAllDocuments()
+  if (clearTask.taskUid != null) {
+    await waitForTask(meili, clearTask.taskUid)
+  }
 
   const posts = await prisma.post.findMany({ where: { status: 'PUBLISHED' } })
   const docs = posts.map(postToDocument)
 
   if (docs.length > 0) {
-    const task = await meili.index(INDEX_UID).addDocuments(docs)
-    if (task.taskUid != null) {
-      await meili.tasks.waitForTask(task.taskUid)
+    const addTask = await index.addDocuments(docs)
+    if (addTask.taskUid != null) {
+      await waitForTask(meili, addTask.taskUid)
     }
   }
 
   return { indexed: docs.length }
+}
+
+/** 增量更新索引：删除下线文章 + 更新变更文章 */
+export async function reindexChangedPosts(
+  removedIds: string[],
+  changedIds: string[]
+): Promise<{ indexed: number; removed: number }> {
+  const meili = getClient()
+  if (!meili) return { indexed: 0, removed: 0 }
+
+  await ensureSearchIndex()
+
+  for (const id of removedIds) {
+    try {
+      await removePostFromIndex(id)
+    } catch (err) {
+      console.warn(`增量索引删除失败 (${id}):`, err)
+    }
+  }
+
+  for (const id of changedIds) {
+    try {
+      await indexPostById(id)
+    } catch (err) {
+      console.warn(`增量索引更新失败 (${id}):`, err)
+    }
+  }
+
+  return { indexed: changedIds.length, removed: removedIds.length }
 }
 
 export async function getSearchIndexStats(): Promise<{ enabled: boolean; documentCount: number | null }> {
@@ -178,11 +227,22 @@ export async function getSearchIndexStats(): Promise<{ enabled: boolean; documen
   }
 }
 
+/** Meilisearch filter 字符串转义 */
+export function escapeMeiliFilterValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
 function buildMeiliFilter(params: SearchQuery): string[] {
   const filters = ['status = "PUBLISHED"']
-  if (params.category) filters.push(`category = "${params.category}"`)
-  if (params.series) filters.push(`series = "${params.series}"`)
-  if (params.tag) filters.push(`tags = "${params.tag}"`)
+  if (params.category) {
+    filters.push(`category = "${escapeMeiliFilterValue(params.category)}"`)
+  }
+  if (params.series) {
+    filters.push(`series = "${escapeMeiliFilterValue(params.series)}"`)
+  }
+  if (params.tag) {
+    filters.push(`tags = "${escapeMeiliFilterValue(params.tag)}"`)
+  }
   return filters
 }
 
@@ -267,8 +327,7 @@ async function searchWithSqlite(params: SearchQuery): Promise<SearchResponse> {
   const recent = params.recent ?? false
   const limit = params.limit ?? (recent ? 8 : 50)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { status: 'PUBLISHED' }
+  const where: Prisma.PostWhereInput = { status: 'PUBLISHED' }
 
   if (category) where.category = category
   if (series) where.series = series

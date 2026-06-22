@@ -3,6 +3,13 @@ import { NextResponse } from 'next/server'
 
 export default withAuth(
   function middleware(req) {
+    if (
+      req.nextUrl.pathname.startsWith('/admin/settings') &&
+      req.nextauth.token?.role === 'EDITOR'
+    ) {
+      return NextResponse.redirect(new URL('/admin/dashboard', req.url))
+    }
+
     // 已登录用户访问 /admin/login 时重定向到仪表盘
     if (req.nextUrl.pathname === '/admin/login' && req.nextauth.token) {
       return NextResponse.redirect(new URL('/admin/dashboard', req.url))

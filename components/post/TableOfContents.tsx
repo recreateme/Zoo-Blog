@@ -26,18 +26,13 @@ export default function TableOfContents({ toc }: TableOfContentsProps) {
     const headings = document.querySelectorAll('h1[id], h2[id], h3[id], h4[id]')
     headings.forEach((el) => observer.observe(el))
     return () => observer.disconnect()
-  }, [])
+  }, [toc])
 
   if (toc.length === 0) return null
 
   return (
-    <nav className="text-sm">
-      <p
-        className="text-xs font-semibold uppercase tracking-widest mb-3"
-        style={{ color: 'var(--text-tertiary)' }}
-      >
-        目录
-      </p>
+    <nav className="text-sm" aria-label="文章目录">
+      <p className="toc-nav-label">目录</p>
       <ul className="space-y-0.5">
         <TocItems items={toc} activeId={activeId} depth={0} />
       </ul>
@@ -57,15 +52,10 @@ function TocItems({
   return (
     <>
       {items.map((item) => (
-        <li key={item.id} style={{ paddingLeft: `${depth * 0.75}rem` }}>
+        <li key={item.id} style={{ paddingLeft: depth > 0 ? `${depth * 0.75}rem` : undefined }}>
           <a
             href={`#${item.id}`}
-            className={cn(
-              'block py-1 leading-snug transition-colors hover:text-[var(--accent)]',
-              item.id === activeId
-                ? 'font-medium text-[var(--accent)]'
-                : 'text-[var(--text-tertiary)]'
-            )}
+            className={cn('toc-link', item.id === activeId && 'toc-link-active')}
             onClick={(e) => {
               e.preventDefault()
               document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' })

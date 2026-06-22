@@ -14,16 +14,11 @@ export default function MobileToc({ toc }: MobileTocProps) {
   if (toc.length === 0) return null
 
   return (
-    <div className="xl:hidden mb-6">
+    <div className="xl:hidden">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-2 rounded-lg px-4 py-2.5 text-sm"
-        style={{
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-subtle)',
-          color: 'var(--text-secondary)',
-        }}
+        className="mobile-toc-trigger"
       >
         <span className="flex items-center gap-2">
           <List size={16} style={{ color: 'var(--accent)' }} />
@@ -34,10 +29,7 @@ export default function MobileToc({ toc }: MobileTocProps) {
         </span>
       </button>
       {open && (
-        <div
-          className="mt-2 rounded-lg p-4 max-h-64 overflow-y-auto"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
-        >
+        <div className="mobile-toc-panel">
           <TableOfContents toc={toc} />
         </div>
       )}

@@ -1,57 +1,44 @@
 import Link from 'next/link'
 import { CATEGORIES } from '@/lib/categories'
-import { getSeriesCatalog } from '@/lib/series-catalog'
-import prisma from '@/lib/db'
+import { getSeriesCatalogCached, getSidebarDataCached, getHomeSummaryCached } from '@/lib/cached-queries'
+import HomeDiscovery from '@/components/home/HomeDiscovery'
+import { formatDistanceToNow } from 'date-fns'
+import { zhCN } from 'date-fns/locale'
 
-async function getCategoryStats() {
-  const stats = await prisma.post.groupBy({
-    by: ['category'],
-    where: { status: 'PUBLISHED' },
-    _count: { id: true },
-  })
-  return Object.fromEntries(stats.map((s: { category: string; _count: { id: number } }) => [s.category, s._count.id]))
+interface SidebarProps {
+  summary?: Awaited<ReturnType<typeof getHomeSummaryCached>>
+  activeTag?: string
 }
 
-async function getPopularTags() {
-  const posts = await prisma.post.findMany({
-    where: { status: 'PUBLISHED' },
-    select: { tags: true },
-  })
-  const tagCount: Record<string, number> = {}
-  for (const post of posts) {
-    try {
-      const tags: string[] = JSON.parse(post.tags)
-      for (const tag of tags) {
-        tagCount[tag] = (tagCount[tag] ?? 0) + 1
-      }
-    } catch { /* ignore */ }
-  }
-  return Object.entries(tagCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([tag, count]) => ({ tag, count }))
-}
-
-export default async function Sidebar() {
-  const [categoryStats, popularTags, seriesList] = await Promise.all([
-    getCategoryStats(),
-    getPopularTags(),
-    getSeriesCatalog(8),
+export default async function Sidebar({ summary: summaryProp, activeTag }: SidebarProps) {
+  const [summary, { categoryStats, popularTags }, seriesList] = await Promise.all([
+    summaryProp ?? getHomeSummaryCached(),
+    getSidebarDataCached(),
+    getSeriesCatalogCached(8),
   ])
 
+  const latestLabel = summary.latestUpdatedAt
+    ? formatDistanceToNow(summary.latestUpdatedAt, { addSuffix: true, locale: zhCN })
+    : '暂无更新'
+
   return (
-    <aside className="space-y-6">
-      {/* 分类 */}
-      <div
-        className="rounded-xl p-5"
-        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-      >
-        <h3
-          className="text-xs font-semibold uppercase tracking-widest mb-4"
-          style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-sans)' }}
-        >
-          分类
-        </h3>
+    <aside className="space-y-5">
+      <div className="home-sidebar-stats surface-panel px-4 py-3">
+        <div className="home-stats">
+          <span>
+            <strong>{summary.publishedCount}</strong> 篇
+          </span>
+          <span>
+            <strong>{summary.categoryCount}</strong> 类
+          </span>
+          <span>更新 {latestLabel}</span>
+        </div>
+      </div>
+
+      <HomeDiscovery popularTags={popularTags} activeTag={activeTag} />
+
+      <div className="surface-panel p-5">
+        <h3 className="home-sidebar-heading">分类</h3>
         <ul className="space-y-0.5">
           {CATEGORIES.map((cat) => {
             const count = categoryStats[cat.id] ?? 0
@@ -67,10 +54,7 @@ export default async function Sidebar() {
                     <span>{cat.name}</span>
                   </span>
                   {count > 0 && (
-                    <span
-                      className="text-xs tabular-nums"
-                      style={{ color: 'var(--text-tertiary)' }}
-                    >
+                    <span className="text-xs tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
                       {count}
                     </span>
                   )}
@@ -81,18 +65,9 @@ export default async function Sidebar() {
         </ul>
       </div>
 
-      {/* 专题 */}
       {seriesList.length > 0 && (
-        <div
-          className="rounded-xl p-5"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-        >
-          <h3
-            className="text-xs font-semibold uppercase tracking-widest mb-4"
-            style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-sans)' }}
-          >
-            专题
-          </h3>
+        <div className="surface-panel p-5">
+          <h3 className="home-sidebar-heading">专题</h3>
           <ul className="space-y-3">
             {seriesList.map((s) => (
               <li key={`${s.category}-${s.name}`}>
@@ -107,7 +82,10 @@ export default async function Sidebar() {
                   </span>
                 </Link>
                 {s.chapters.length > 0 && (
-                  <ul className="mt-1 ml-2 pl-2 space-y-0.5" style={{ borderLeft: '2px solid var(--border-subtle)' }}>
+                  <ul
+                    className="mt-1 ml-2 pl-2 space-y-0.5"
+                    style={{ borderLeft: '2px solid var(--border-subtle)' }}
+                  >
                     {s.chapters.map((ch) => (
                       <li key={ch.title}>
                         <Link
@@ -127,38 +105,6 @@ export default async function Sidebar() {
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {/* 热门标签 */}
-      {popularTags.length > 0 && (
-        <div
-          className="rounded-xl p-5"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-        >
-          <h3
-            className="text-xs font-semibold uppercase tracking-widest mb-4"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            热门标签
-          </h3>
-          <div className="flex flex-wrap gap-1.5">
-            {popularTags.map(({ tag, count }) => (
-              <Link
-                key={tag}
-                href={`/search?tag=${encodeURIComponent(tag)}`}
-                className="badge transition-colors hover:opacity-80"
-                style={{
-                  background: 'var(--bg-surface)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                {tag}
-                <span style={{ color: 'var(--text-tertiary)' }}>{count}</span>
-              </Link>
-            ))}
-          </div>
         </div>
       )}
     </aside>

@@ -3,34 +3,81 @@ import { Clock, Eye, CalendarDays } from 'lucide-react'
 import { cn, formatDate, formatNumber, formatWordCount, parseTags } from '@/lib/utils'
 import { getCategoryById } from '@/lib/categories'
 import Badge from '@/components/ui/Badge'
+import { SearchHighlightText } from '@/components/search/SearchHighlightText'
 import type { PostMeta } from '@/types'
+import type { SearchHighlight } from '@/lib/search-index'
 
 interface PostCardProps {
-  post: PostMeta
+  post: PostMeta & { highlight?: SearchHighlight }
   variant?: 'default' | 'compact' | 'featured'
+  /** compact：分类页等同分类列表时隐藏分类标签与图标 */
+  hideCategory?: boolean
+  /** compact：教程序号等左侧标注 */
+  orderLabel?: string | number
 }
 
-export default function PostCard({ post, variant = 'default' }: PostCardProps) {
+export default function PostCard({
+  post,
+  variant = 'default',
+  hideCategory = false,
+  orderLabel,
+}: PostCardProps) {
   const tags = parseTags(post.tags as unknown as string)
   const category = getCategoryById(post.category)
 
   if (variant === 'compact') {
     return (
-      <Link href={`/post/${post.id}`} className="group block">
-        <article className="flex items-start gap-3 py-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+      <Link href={`/post/${post.id}`} className="group block home-post-compact">
+        <article
+          className={cn(
+            'flex items-start gap-3 py-3.5 border-b home-post-compact-inner',
+            `badge-cat-${post.category}`
+          )}
+          style={{ borderColor: 'var(--border-subtle)' }}
+        >
+          {orderLabel != null && (
+            <span
+              className="shrink-0 text-xs font-medium tabular-nums mt-0.5 w-5 text-right"
+              style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}
+            >
+              {orderLabel}
+            </span>
+          )}
           <div className="flex-1 min-w-0">
             <h3
               className="text-sm font-medium leading-snug group-hover:text-[var(--accent)] transition-colors line-clamp-2"
-              style={{ color: 'var(--text-primary)' }}
+              style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-serif)' }}
             >
-              {post.title}
+              <SearchHighlightText html={post.highlight?.title} fallback={post.title} />
             </h3>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-              {formatDate(post.publishedAt ?? post.createdAt)}
+            {(post.summary || post.highlight?.summary) && (
+              <p
+                className="text-xs mt-1 line-clamp-1"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                <SearchHighlightText
+                  html={post.highlight?.summary}
+                  fallback={post.summary ?? ''}
+                />
+              </p>
+            )}
+            <p className="text-xs mt-1.5 flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-tertiary)' }}>
+              <span>{formatDate(post.publishedAt ?? post.createdAt)}</span>
+              {!hideCategory && category && (
+                <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--cat-fg, var(--accent))' }}>
+                  {category.name}
+                </span>
+              )}
+              {hideCategory && post.series?.trim() && (
+                <span>{post.series}</span>
+              )}
+              {post.readingTime != null && post.readingTime > 0 && (
+                <span>{post.readingTime} 分钟</span>
+              )}
             </p>
           </div>
-          {category && (
-            <span className="text-lg shrink-0">{category.icon}</span>
+          {!hideCategory && category && (
+            <span className="text-lg shrink-0 opacity-80">{category.icon}</span>
           )}
         </article>
       </Link>
@@ -49,8 +96,7 @@ export default function PostCard({ post, variant = 'default' }: PostCardProps) {
             </Badge>
           </div>
           <h2
-            className="text-2xl md:text-3xl mb-3 group-hover:text-[var(--accent)] transition-colors"
-            style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, lineHeight: 1.3, color: 'var(--text-primary)' }}
+            className="text-display text-2xl md:text-3xl mb-3 group-hover:text-[var(--accent)] transition-colors leading-snug"
           >
             {post.title}
           </h2>
@@ -105,23 +151,21 @@ export default function PostCard({ post, variant = 'default' }: PostCardProps) {
 
         {/* Title */}
         <h2
-          className="text-lg leading-snug group-hover:text-[var(--accent)] transition-colors"
-          style={{
-            fontFamily: 'var(--font-serif)',
-            fontWeight: 400,
-            color: 'var(--text-primary)',
-          }}
+          className="text-display text-lg leading-snug group-hover:text-[var(--accent)] transition-colors"
         >
-          {post.title}
+          <SearchHighlightText html={post.highlight?.title} fallback={post.title} />
         </h2>
 
         {/* Summary */}
-        {post.summary && (
+        {(post.summary || post.highlight?.summary) && (
           <p
             className="text-sm leading-relaxed line-clamp-2"
             style={{ color: 'var(--text-secondary)' }}
           >
-            {post.summary}
+            <SearchHighlightText
+              html={post.highlight?.summary}
+              fallback={post.summary ?? ''}
+            />
           </p>
         )}
 
