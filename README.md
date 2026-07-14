@@ -2,7 +2,7 @@
 
 > 基于 Next.js 14 + TypeScript 构建的个人学习笔记发布平台。支持 Markdown 写作、Monaco 在线编辑、AI 辅助摘要与标签、RAG 知识问答、知识图谱可视化、多分类管理、本地笔记 rsync 同步，可 Docker 一键部署或 PM2 + Nginx 上 VPS。
 
-**当前版本：0.4.2**
+**当前版本：0.4.3**
 
 ---
 
@@ -16,7 +16,7 @@
 | **RAG 问答** | `/ask` 页面：向量检索笔记片段 + LLM 综合回答，附来源引用 |
 | **知识图谱** | `/graph`：D3 力导向图，笔记链接 / 标签关联 / 时间演化三视图，支持分类·专题·孤立节点筛选 |
 | **内容管理** | 草稿/发布状态、多级分类、系列教程、标签系统、附件管理 |
-| **展示** | 时间线首页、分类页、文章详情页含 TOC、全文搜索、⌃K 命令搜索 |
+| **展示** | 时间线首页、宽版阅读页（正文主栏 + 右侧 sticky 目录）、阅读进度、全文搜索、⌃K 命令搜索 |
 | **同步** | 本地文件夹 rsync、Git 备份、一键内容索引与向量重建 |
 | **SEO** | sitemap.xml、RSS Feed、Open Graph、JSON-LD |
 | **部署** | Docker Compose 全栈 **或** PM2 + Nginx + Let's Encrypt |
@@ -27,6 +27,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| [**笔记上传手册**](笔记上传手册.md) | Frontmatter、配图、一键 `publish.bat` 推送 GitHub 并更新 VPS |
 | [快速开始](docs/QUICKSTART.md) | 5 分钟本地运行（npm 或 Docker） |
 | [部署指南](docs/DEPLOYMENT.md) | Docker 全栈 / VPS 生产环境完整部署 |
 | [配置说明](docs/CONFIGURATION.md) | 所有环境变量详解 |

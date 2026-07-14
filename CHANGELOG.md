@@ -10,10 +10,12 @@
 
 - 阅读进度条加粗，滚动时右上角显示百分比
 - 文章侧栏目录支持滚动、章节进度与高亮；TOC 忽略代码块内 `#` 注释伪标题
+- 阅读页改为宽版布局：容器约 `90rem`，大屏「左留白 + 正文主栏 + 右侧 sticky 目录」；取消 `.markdown-body` 的 `68ch` 限宽
 
 ### 内容
 
 - 新增计算机视觉长文《传统计算机视觉全解》及封面图（`public/images/traditional-cv-cover.png`）
+- 根目录《笔记上传手册》+ `publish.bat` / `scripts/publish.ps1` / `scripts/deploy-vps.ps1` 一键推送 GitHub 并更新 VPS
 
 ### 首页阅读索引（借鉴 pingfan 结构）
 

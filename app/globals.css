@@ -1114,27 +1114,48 @@
     background: var(--bg-surface);
   }
 
-  /* ── 阅读页（Phase D） ── */
+  /* ── 阅读页（宽版：正文主栏 + 目录靠右） ── */
   .post-page {
-    max-width: 72rem;
+    max-width: 90rem;
     margin-inline: auto;
-    padding: 2.5rem 1rem;
-  }
-
-  @media (min-width: 640px) {
-    .post-page {
-      padding-inline: 1.5rem;
-    }
+    padding: 2.5rem clamp(1rem, 2.5vw, 2rem);
   }
 
   .post-layout {
-    display: flex;
-    gap: 3rem;
+    display: grid;
+    grid-template-columns: minmax(0, 68rem);
+    justify-content: center;
+    align-items: start;
+    gap: 0;
   }
 
   .post-article {
-    flex: 1;
     min-width: 0;
+    width: 100%;
+  }
+
+  /* ≥1280px 且有目录：左留白 + 正文主栏 + 右侧 sticky 目录 */
+  @media (min-width: 1280px) {
+    .post-layout:has(.post-sidebar) {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 64rem) 12.5rem;
+      justify-content: stretch;
+      column-gap: 1.75rem;
+    }
+
+    .post-layout:has(.post-sidebar) .post-article {
+      grid-column: 2;
+    }
+
+    .post-layout:has(.post-sidebar) .post-sidebar {
+      grid-column: 3;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .post-layout:has(.post-sidebar) {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 68rem) 13rem;
+      column-gap: 2rem;
+    }
   }
 
   .post-header {
@@ -1252,7 +1273,7 @@
 
   .post-sidebar {
     display: none;
-    width: 14rem;
+    width: auto;
     flex-shrink: 0;
   }
 
@@ -1267,6 +1288,7 @@
     top: 5rem;
     max-height: calc(100vh - 6rem);
     overflow-y: auto;
+    padding-right: 0.25rem;
   }
 
   .toc-nav {
@@ -1378,6 +1400,8 @@
     grid-template-columns: 1fr;
     gap: 0.75rem;
     margin-top: 3rem;
+    margin-inline: auto;
+    max-width: 68rem;
     padding-top: 2rem;
     border-top: 1px solid var(--border-subtle);
   }
@@ -1443,6 +1467,8 @@
 
   .related-posts {
     margin-top: 4rem;
+    max-width: 68rem;
+    margin-inline: auto;
   }
 
   .related-posts-title {
@@ -2080,10 +2106,10 @@
    ============================================================ */
 .markdown-body {
   font-family: var(--font-sans);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   line-height: 1.85;
   color: var(--text-primary);
-  max-width: 68ch;
+  max-width: none;
 }
 
 .markdown-body h1,
