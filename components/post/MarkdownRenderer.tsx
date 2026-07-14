@@ -6,14 +6,20 @@ interface MarkdownRendererProps {
   html: string
 }
 
+const COPY_LABEL = '复制'
+const COPIED_LABEL = '已复制到剪切板'
+const FAIL_LABEL = '复制失败'
+const FEEDBACK_MS = 2200
+
 export default function MarkdownRenderer({ html }: MarkdownRendererProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!ref.current) return
 
-    // 为每个 pre 块添加复制按钮
     const preBlocks = ref.current.querySelectorAll('pre')
+    const timers: number[] = []
+
     preBlocks.forEach((pre) => {
       if (pre.querySelector('.copy-btn')) return
 
@@ -23,16 +29,43 @@ export default function MarkdownRenderer({ html }: MarkdownRendererProps) {
       wrapper.appendChild(pre)
 
       const btn = document.createElement('button')
+      btn.type = 'button'
       btn.className = 'copy-btn'
-      btn.textContent = '复制'
+      btn.textContent = COPY_LABEL
+      btn.setAttribute('aria-label', '复制代码')
+
       btn.addEventListener('click', async () => {
-        const code = pre.querySelector('code')?.textContent ?? ''
-        await navigator.clipboard.writeText(code)
-        btn.textContent = '已复制！'
-        setTimeout(() => { btn.textContent = '复制' }, 2000)
+        const code = pre.querySelector('code')?.textContent ?? pre.textContent ?? ''
+        if (!code) return
+
+        try {
+          await navigator.clipboard.writeText(code)
+          btn.textContent = COPIED_LABEL
+          btn.classList.add('copy-btn-copied')
+          btn.setAttribute('aria-label', COPIED_LABEL)
+          const t = window.setTimeout(() => {
+            btn.textContent = COPY_LABEL
+            btn.classList.remove('copy-btn-copied')
+            btn.setAttribute('aria-label', '复制代码')
+          }, FEEDBACK_MS)
+          timers.push(t)
+        } catch {
+          btn.textContent = FAIL_LABEL
+          btn.classList.add('copy-btn-failed')
+          const t = window.setTimeout(() => {
+            btn.textContent = COPY_LABEL
+            btn.classList.remove('copy-btn-failed')
+          }, FEEDBACK_MS)
+          timers.push(t)
+        }
       })
+
       wrapper.appendChild(btn)
     })
+
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t))
+    }
   }, [html])
 
   return (
