@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { copyTextToClipboard } from '@/lib/clipboard'
 
 interface MarkdownRendererProps {
   html: string
@@ -38,10 +39,11 @@ export default function MarkdownRenderer({ html }: MarkdownRendererProps) {
         const code = pre.querySelector('code')?.textContent ?? pre.textContent ?? ''
         if (!code) return
 
-        try {
-          await navigator.clipboard.writeText(code)
+        const ok = await copyTextToClipboard(code)
+        if (ok) {
           btn.textContent = COPIED_LABEL
           btn.classList.add('copy-btn-copied')
+          btn.classList.remove('copy-btn-failed')
           btn.setAttribute('aria-label', COPIED_LABEL)
           const t = window.setTimeout(() => {
             btn.textContent = COPY_LABEL
@@ -49,9 +51,10 @@ export default function MarkdownRenderer({ html }: MarkdownRendererProps) {
             btn.setAttribute('aria-label', '复制代码')
           }, FEEDBACK_MS)
           timers.push(t)
-        } catch {
+        } else {
           btn.textContent = FAIL_LABEL
           btn.classList.add('copy-btn-failed')
+          btn.classList.remove('copy-btn-copied')
           const t = window.setTimeout(() => {
             btn.textContent = COPY_LABEL
             btn.classList.remove('copy-btn-failed')

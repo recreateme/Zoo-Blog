@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Upload, Trash2, Copy, FileText, Image as ImageIcon, Loader2, X } from 'lucide-react'
 import { formatFileSize, cn } from '@/lib/utils'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import EmptyState from '@/components/ui/EmptyState'
 import type { Attachment } from '@/types'
 
@@ -54,8 +55,9 @@ export default function FilesPage() {
     fetchFiles()
   }
 
-  const copyUrl = (url: string, id: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}${url}`)
+  const copyUrl = async (url: string, id: string) => {
+    const ok = await copyTextToClipboard(`${window.location.origin}${url}`)
+    if (!ok) return
     setCopied(id)
     setTimeout(() => setCopied(null), 2000)
   }
