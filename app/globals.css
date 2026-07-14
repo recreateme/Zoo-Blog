@@ -1114,7 +1114,7 @@
     background: var(--bg-surface);
   }
 
-  /* ── 阅读页（宽版：正文主栏 + 目录靠右） ── */
+  /* ── 阅读页：正文居中主栏 + 视口右侧固定目录 ── */
   .post-page {
     max-width: 90rem;
     margin-inline: auto;
@@ -1134,27 +1134,23 @@
     width: 100%;
   }
 
-  /* ≥1280px 且有目录：左留白 + 正文主栏 + 右侧 sticky 目录 */
+  /* 为大屏固定目录预留右侧空间，避免正文被遮挡 */
   @media (min-width: 1280px) {
+    .post-page:has(.post-sidebar) {
+      padding-right: 15.5rem;
+    }
+
     .post-layout:has(.post-sidebar) {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 64rem) 12.5rem;
-      justify-content: stretch;
-      column-gap: 1.75rem;
-    }
-
-    .post-layout:has(.post-sidebar) .post-article {
-      grid-column: 2;
-    }
-
-    .post-layout:has(.post-sidebar) .post-sidebar {
-      grid-column: 3;
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 68rem;
+      margin-inline: 0 auto;
+      width: 100%;
     }
   }
 
   @media (min-width: 1536px) {
     .post-layout:has(.post-sidebar) {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 68rem) 13rem;
-      column-gap: 2rem;
+      max-width: 72rem;
     }
   }
 
@@ -1273,28 +1269,41 @@
 
   .post-sidebar {
     display: none;
-    width: auto;
-    flex-shrink: 0;
   }
 
+  /* 视口最右侧固定悬浮，滚动时始终停留在上方 */
   @media (min-width: 1280px) {
     .post-sidebar {
       display: block;
+      position: fixed;
+      top: 4.75rem;
+      right: max(0.5rem, env(safe-area-inset-right, 0px));
+      z-index: 40;
+      width: 14.25rem;
+      max-height: calc(100vh - 5.5rem);
     }
   }
 
   .post-sidebar-inner {
-    position: sticky;
-    top: 5rem;
-    max-height: calc(100vh - 6rem);
-    overflow-y: auto;
-    padding-right: 0.25rem;
+    height: 100%;
+    max-height: calc(100vh - 5.5rem);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem 0.5rem 0.75rem 0.625rem;
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+    border: 1px solid var(--border-subtle);
+    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow-sm);
   }
 
   .toc-nav {
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 6rem);
+    min-height: 0;
+    height: 100%;
+    max-height: none;
   }
 
   .toc-nav-header {
@@ -1338,16 +1347,20 @@
 
   .toc-list {
     overflow-y: auto;
+    flex: 1;
+    min-height: 0;
     padding-right: 0.25rem;
     margin: 0;
     scrollbar-width: thin;
+    scroll-behavior: smooth;
   }
 
   .toc-link {
     display: block;
-    padding: 0.25rem 0.5rem 0.25rem 0.625rem;
+    padding: 0.3rem 0.5rem 0.3rem 0.625rem;
     line-height: 1.45;
     border-left: 2px solid transparent;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     color: var(--text-tertiary);
     text-decoration: none;
     transition: color 0.12s, border-color 0.12s, background 0.12s;
@@ -1367,7 +1380,7 @@
     border-left-color: var(--accent);
     color: var(--accent);
     font-weight: 500;
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
   }
 
   .mobile-toc-trigger {
