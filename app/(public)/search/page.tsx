@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import SearchClient from './SearchClient'
 import { getSidebarDataCached } from '@/lib/cached-queries'
+import { listSeriesWithCounts } from '@/lib/series-queries'
 
 export const metadata = {
   title: '搜索笔记',
@@ -8,7 +9,12 @@ export const metadata = {
 }
 
 export default async function SearchPage() {
-  const { popularTags } = await getSidebarDataCached()
+  const [{ popularTags }, seriesList] = await Promise.all([
+    getSidebarDataCached(),
+    listSeriesWithCounts(),
+  ])
+
+  const seriesOptions = seriesList.map((s) => ({ id: s.id, name: s.name }))
 
   return (
     <Suspense
@@ -23,7 +29,7 @@ export default async function SearchPage() {
         </div>
       }
     >
-      <SearchClient popularTags={popularTags} />
+      <SearchClient popularTags={popularTags} seriesOptions={seriesOptions} />
     </Suspense>
   )
 }

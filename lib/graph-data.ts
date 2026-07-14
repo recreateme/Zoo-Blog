@@ -58,6 +58,8 @@ interface PostRow {
   title: string
   category: string
   series?: string | null
+  /** 多专题名称列表 */
+  seriesNames?: string[]
   tags: string
 }
 
@@ -98,14 +100,16 @@ export function buildTagGraphFromPosts(posts: PostRow[]): GraphPayload {
   const tagMeta = new Map<string, { categories: Set<string>; series: Set<string> }>()
 
   for (const post of posts) {
+    const postSeriesNames =
+      post.seriesNames?.filter(Boolean) ??
+      (post.series?.trim() ? [post.series.trim()] : [])
     const tags = parseTags(post.tags)
     tagLists.push(tags)
     for (const tag of tags) {
       tagDegree.set(tag, (tagDegree.get(tag) ?? 0) + 1)
       const meta = tagMeta.get(tag) ?? { categories: new Set<string>(), series: new Set<string>() }
       meta.categories.add(post.category)
-      const s = post.series?.trim()
-      if (s) meta.series.add(s)
+      for (const s of postSeriesNames) meta.series.add(s)
       tagMeta.set(tag, meta)
     }
   }
@@ -155,14 +159,20 @@ export function buildLinkGraphFromData(
     degreeMap.set(l.toPostId, (degreeMap.get(l.toPostId) ?? 0) + 1)
   }
 
-  const nodes: GraphNode[] = posts.map((p) => ({
-    id: p.id,
-    label: p.title,
-    category: p.category,
-    series: p.series?.trim() || null,
-    kind: 'post',
-    degree: degreeMap.get(p.id) ?? 0,
-  }))
+  const nodes: GraphNode[] = posts.map((p) => {
+    const seriesNames =
+      p.seriesNames?.filter(Boolean) ??
+      (p.series?.trim() ? [p.series.trim()] : [])
+    return {
+      id: p.id,
+      label: p.title,
+      category: p.category,
+      series: seriesNames[0] ?? null,
+      seriesList: seriesNames,
+      kind: 'post' as const,
+      degree: degreeMap.get(p.id) ?? 0,
+    }
+  })
 
   return {
     view: 'links',
@@ -276,7 +286,9 @@ function nodeMatchesCategory(node: GraphNode, category: string): boolean {
 }
 
 function nodeMatchesSeries(node: GraphNode, series: string): boolean {
-  if (node.kind === 'post') return node.series === series
+  if (node.kind === 'post') {
+    return node.series === series || (node.seriesList?.includes(series) ?? false)
+  }
   return node.seriesList?.includes(series) ?? false
 }
 
@@ -331,11 +343,40 @@ export function collectSeriesOptions(nodes: GraphNode[]): string[] {
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'))
 }
 
+const graphPostSelect = {
+  id: true,
+  title: true,
+  category: true,
+  series: true,
+  tags: true,
+  seriesLinks: {
+    select: { series: { select: { name: true } } },
+  },
+} as const
+
+function mapGraphPosts<T extends {
+  id: string
+  title: string
+  category: string
+  series: string | null
+  tags: string
+  seriesLinks: { series: { name: string } }[]
+}>(posts: T[]) {
+  return posts.map((p) => ({
+    id: p.id,
+    title: p.title,
+    category: p.category,
+    series: p.series,
+    seriesNames: p.seriesLinks.map((l) => l.series.name).filter(Boolean),
+    tags: p.tags,
+  }))
+}
+
 export async function getLinkGraphData(): Promise<GraphPayload> {
   const [posts, links] = await Promise.all([
     prisma.post.findMany({
       where: { status: 'PUBLISHED' },
-      select: { id: true, title: true, category: true, series: true, tags: true },
+      select: graphPostSelect,
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
     }),
     prisma.postLink.findMany({
@@ -343,16 +384,16 @@ export async function getLinkGraphData(): Promise<GraphPayload> {
     }),
   ])
 
-  return buildLinkGraphFromData(posts, links)
+  return buildLinkGraphFromData(mapGraphPosts(posts), links)
 }
 
 export async function getTagGraphData(): Promise<GraphPayload> {
   const posts = await prisma.post.findMany({
     where: { status: 'PUBLISHED' },
-    select: { id: true, title: true, category: true, series: true, tags: true },
+    select: graphPostSelect,
   })
 
-  return buildTagGraphFromPosts(posts)
+  return buildTagGraphFromPosts(mapGraphPosts(posts))
 }
 
 export async function getTimelineGraphData(): Promise<GraphPayload> {
@@ -360,11 +401,7 @@ export async function getTimelineGraphData(): Promise<GraphPayload> {
     prisma.post.findMany({
       where: { status: 'PUBLISHED' },
       select: {
-        id: true,
-        title: true,
-        category: true,
-        series: true,
-        tags: true,
+        ...graphPostSelect,
         publishedAt: true,
         createdAt: true,
       },
@@ -375,7 +412,13 @@ export async function getTimelineGraphData(): Promise<GraphPayload> {
     }),
   ])
 
-  return buildTimelineGraphFromData(posts, links)
+  const mapped = posts.map((p) => ({
+    ...mapGraphPosts([p])[0],
+    publishedAt: p.publishedAt,
+    createdAt: p.createdAt,
+  }))
+
+  return buildTimelineGraphFromData(mapped, links)
 }
 
 export async function getGraphData(view: GraphView): Promise<GraphPayload> {

@@ -1,4 +1,4 @@
-/** 与静态路由冲突的路径，不可作为分类 slug */
+/** 与静态路由冲突的路径，不可作为专题/旧分类 slug */
 export const RESERVED_PATHS = new Set([
   'ask',
   'search',
@@ -6,6 +6,7 @@ export const RESERVED_PATHS = new Set([
   'post',
   'admin',
   'api',
+  'series',
   'rss.xml',
   'sitemap.xml',
   'robots.txt',

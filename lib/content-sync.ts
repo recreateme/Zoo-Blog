@@ -5,6 +5,7 @@ import { parseFrontmatter, extractPostMeta } from '@/lib/markdown'
 import { stringifyTags } from '@/lib/utils'
 import prisma from '@/lib/db'
 import { syncPostLinksBatch, removePostLinksForIds } from '@/lib/wiki-links'
+import { syncPostSeriesMemberships } from '@/lib/series-ops'
 
 const CONTENT_DIR = process.env.CONTENT_DIR ?? './content'
 
@@ -121,6 +122,8 @@ function buildSyncFingerprint(data: {
   outline: string
   series: string | null
   seriesOrder: number | null
+  coverImage: string | null
+  seriesMemberships: string
 }): string {
   return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex')
 }
@@ -142,6 +145,8 @@ function fingerprintFromMeta(
     outline: outlineJson,
     series: meta.series,
     seriesOrder: meta.seriesOrder,
+    coverImage: meta.coverImage,
+    seriesMemberships: JSON.stringify(meta.seriesMemberships),
   })
 }
 
@@ -157,9 +162,35 @@ function fingerprintFromPost(
     outline: string
     series: string | null
     seriesOrder: number | null
-  }
+    coverImage: string | null
+  },
+  membershipKey: string
 ): string {
-  return buildSyncFingerprint(post)
+  return buildSyncFingerprint({
+    content: post.content,
+    title: post.title,
+    category: post.category,
+    subcategory: post.subcategory,
+    tags: post.tags,
+    status: post.status,
+    summary: post.summary,
+    outline: post.outline,
+    series: post.series,
+    seriesOrder: post.seriesOrder,
+    coverImage: post.coverImage,
+    seriesMemberships: membershipKey,
+  })
+}
+
+async function membershipFingerprint(postId: string): Promise<string> {
+  const rows = await prisma.postSeries.findMany({
+    where: { postId },
+    include: { series: { select: { name: true } } },
+    orderBy: [{ seriesId: 'asc' }],
+  })
+  return JSON.stringify(
+    rows.map((r) => ({ name: r.series.name, order: r.order }))
+  )
 }
 
 /**
@@ -211,12 +242,14 @@ export async function runContentSync(): Promise<SyncResult> {
             outline: outlineJson,
             series: meta.series,
             seriesOrder: meta.seriesOrder,
+            coverImage: meta.coverImage,
             readingTime: meta.readingTime,
             wordCount: meta.wordCount,
             filePath: relPath,
             publishedAt: meta.publishedAt,
           },
         })
+        await syncPostSeriesMemberships(meta.id, meta.seriesMemberships)
         added++
         changedIds.push(meta.id)
         continue
@@ -229,7 +262,8 @@ export async function runContentSync(): Promise<SyncResult> {
 
       const pathChanged = existing.filePath !== relPath
       const fileFp = fingerprintFromMeta(meta, content, outlineJson, tagsJson)
-      const dbFp = fingerprintFromPost(existing)
+      const memKey = await membershipFingerprint(existing.id)
+      const dbFp = fingerprintFromPost(existing, memKey)
 
       if (!pathChanged && fileFp === dbFp) {
         skipped++
@@ -249,12 +283,14 @@ export async function runContentSync(): Promise<SyncResult> {
           outline: outlineJson,
           series: meta.series,
           seriesOrder: meta.seriesOrder,
+          coverImage: meta.coverImage,
           readingTime: meta.readingTime,
           wordCount: meta.wordCount,
           filePath: relPath,
           publishedAt: meta.publishedAt ?? existing.publishedAt,
         },
       })
+      await syncPostSeriesMemberships(meta.id, meta.seriesMemberships)
       updated++
       changedIds.push(meta.id)
     } catch (err) {

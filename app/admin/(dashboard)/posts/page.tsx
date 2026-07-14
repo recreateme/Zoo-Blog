@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { PenSquare, Trash2, Eye, Search, Plus, Loader2 } from 'lucide-react'
+import { PenSquare, Trash2, Eye, Search, Plus, Loader2, Download } from 'lucide-react'
 import { CATEGORIES } from '@/lib/categories'
 import { formatDateShort } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
@@ -176,6 +176,13 @@ export default function PostsPage() {
                       <Link href={`/admin/editor/${post.id}`} className="btn btn-ghost p-1.5" title="编辑">
                         <PenSquare size={14} />
                       </Link>
+                      <a
+                        href={`/api/posts/${post.id}/export`}
+                        className="btn btn-ghost p-1.5"
+                        title="下载 zip"
+                      >
+                        <Download size={14} />
+                      </a>
                       <button
                         onClick={() => handleDelete(post)}
                         disabled={deleting === post.id}

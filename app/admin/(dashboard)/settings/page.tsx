@@ -1,8 +1,28 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, RefreshCw, CheckCircle, AlertCircle, Database, FolderSync, Bot, Search, Brain } from 'lucide-react'
+import {
+  Loader2, RefreshCw, CheckCircle, AlertCircle, Database, FolderSync,
+  Bot, Search, Brain, Github, Server, Rocket,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+interface DeployStatus {
+  gitReady: boolean
+  vpsReady: boolean
+  deployHookConfigured: boolean
+  localScriptReady: boolean
+  deployEnvFilePresent: boolean
+  hints: string[]
+  last?: {
+    action: string
+    success: boolean
+    message: string
+    finishedAt: string
+    actor?: string | null
+    output?: string
+  } | null
+}
 
 interface SyncStatus {
   contentFileCount: number
@@ -41,18 +61,85 @@ export default function SettingsPage() {
   const [reindexing, setReindexing] = useState(false)
   const [vectorReindexing, setVectorReindexing] = useState(false)
   const [loadingStatus, setLoadingStatus] = useState(true)
+  const [deployStatus, setDeployStatus] = useState<DeployStatus | null>(null)
+  const [gitSyncing, setGitSyncing] = useState(false)
+  const [deploying, setDeploying] = useState(false)
 
   const fetchStatus = async () => {
     setLoadingStatus(true)
     try {
-      const res = await fetch('/api/sync')
-      const data = await res.json()
-      setSyncStatus(data)
+      const [syncRes, deployRes] = await Promise.all([
+        fetch('/api/sync'),
+        fetch('/api/admin/deploy-status'),
+      ])
+      const syncData = await syncRes.json()
+      setSyncStatus(syncData)
+      if (deployRes.ok) {
+        setDeployStatus(await deployRes.json())
+      }
     } catch { /* ignore */ }
     setLoadingStatus(false)
   }
 
   useEffect(() => { fetchStatus() }, [])
+
+  const handleGitSync = async () => {
+    if (!window.confirm('将暂存 content/ 与 public/images/ 并推送到 GitHub。继续？')) return
+    setGitSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/admin/git-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      })
+      const data = await res.json()
+      setSyncResult({
+        success: !!data.success,
+        message: data.result?.message ?? data.error ?? '推送结束',
+      })
+      if (data.result) {
+        setDeployStatus((prev) =>
+          prev ? { ...prev, last: data.result } : prev
+        )
+      }
+    } catch {
+      setSyncResult({ success: false, message: 'GitHub 推送请求失败' })
+    }
+    setGitSyncing(false)
+  }
+
+  const handleDeployVps = async () => {
+    if (
+      !window.confirm(
+        '将触发 VPS 部署（git pull + docker compose rebuild）。可能需要数分钟。继续？'
+      )
+    ) {
+      return
+    }
+    setDeploying(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/admin/deploy-vps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      })
+      const data = await res.json()
+      setSyncResult({
+        success: !!data.success,
+        message: data.result?.message ?? data.error ?? '部署结束',
+      })
+      if (data.result) {
+        setDeployStatus((prev) =>
+          prev ? { ...prev, last: data.result } : prev
+        )
+      }
+    } catch {
+      setSyncResult({ success: false, message: 'VPS 部署请求失败' })
+    }
+    setDeploying(false)
+  }
 
   const handleSync = async () => {
     setSyncing(true)
@@ -131,8 +218,79 @@ export default function SettingsPage() {
     <div className="admin-page admin-page-narrow">
       <header className="admin-page-header">
         <h1 className="admin-page-title">系统设置</h1>
-        <p className="admin-page-lead">内容同步、搜索与 RAG 向量索引（仅管理员）</p>
+        <p className="admin-page-lead">内容同步、发布、搜索与 RAG（仅管理员）</p>
       </header>
+
+      <section className="admin-section">
+        <h2 className="admin-section-title">
+          <Rocket size={16} style={{ color: 'var(--accent)' }} />
+          发布到 GitHub / VPS
+        </h2>
+        <div className="admin-panel">
+          <div className="flex flex-wrap gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <Github size={14} style={{ color: 'var(--text-tertiary)' }} />
+              <span className="text-sm">GitHub 推送</span>
+              <StatusBadge
+                enabled={!!deployStatus?.gitReady}
+                onLabel="就绪"
+                offLabel="未就绪"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Server size={14} style={{ color: 'var(--text-tertiary)' }} />
+              <span className="text-sm">VPS 部署</span>
+              <StatusBadge
+                enabled={!!deployStatus?.vpsReady}
+                onLabel={deployStatus?.deployHookConfigured ? 'Hook' : '脚本'}
+                offLabel="未配置"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 mb-4">
+            <button
+              onClick={handleGitSync}
+              disabled={gitSyncing || !deployStatus?.gitReady}
+              className="btn btn-primary text-sm"
+            >
+              {gitSyncing ? <Loader2 size={14} className="animate-spin" /> : <Github size={14} />}
+              {gitSyncing ? '推送中…' : '推送到 GitHub'}
+            </button>
+            <button
+              onClick={handleDeployVps}
+              disabled={deploying || !deployStatus?.vpsReady}
+              className="btn btn-secondary text-sm"
+            >
+              {deploying ? <Loader2 size={14} className="animate-spin" /> : <Server size={14} />}
+              {deploying ? '部署中…' : '部署到 VPS'}
+            </button>
+          </div>
+
+          {(deployStatus?.hints?.length ?? 0) > 0 && (
+            <ul className="text-xs text-meta list-disc list-inside space-y-1 mb-3">
+              {deployStatus!.hints.map((h) => (
+                <li key={h}>{h}</li>
+              ))}
+            </ul>
+          )}
+
+          {deployStatus?.last && (
+            <p className="text-xs text-meta">
+              上次：{deployStatus.last.action} · {deployStatus.last.message}
+              {deployStatus.last.actor ? ` · ${deployStatus.last.actor}` : ''}
+              {' · '}
+              {new Date(deployStatus.last.finishedAt).toLocaleString('zh-CN')}
+            </p>
+          )}
+
+          <div className="mt-4 space-y-1 text-xs text-meta">
+            <p>密钥仅存服务器 <code className="text-[11px]">.deploy.env</code> / <code className="text-[11px]">.env</code>，界面不展示密码。</p>
+            <p>Docker 容器内无法 SSH 时，请配置 <code className="text-[11px]">DEPLOY_HOOK_URL</code> 指向宿主机 hook。</p>
+            <p>本地也可继续用 <code className="text-[11px]">publish.bat</code> / <code className="text-[11px]">scripts/publish.ps1</code>。</p>
+          </div>
+        </div>
+      </section>
 
       <section className="admin-section">
         <h2 className="admin-section-title">

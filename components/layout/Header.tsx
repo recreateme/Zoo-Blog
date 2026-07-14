@@ -2,16 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, Menu, X, ScrollText, ChevronDown, MessageCircle, Network } from 'lucide-react'
+import { Search, Menu, X, ScrollText, ChevronDown, MessageCircle, Network, BookMarked } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { CATEGORIES } from '@/lib/categories'
 import { getSiteName, HOME_NAV_LABEL } from '@/lib/site'
 import { openCommandSearch } from '@/lib/search-events'
 import ThemeSwitcher from '@/components/ui/ThemeSwitcher'
 
 const NAV_LINKS = [
   { href: '/', label: HOME_NAV_LABEL },
+  { href: '/series', label: '专题' },
   { href: '/search', label: '搜索' },
 ]
 
@@ -24,8 +24,7 @@ export default function Header() {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
   const siteName = getSiteName()
-
-  const activeCategoryId = CATEGORIES.find((c) => pathname === `/${c.id}`)?.id
+  const seriesActive = pathname === '/series' || pathname.startsWith('/series/')
   const moreActive = MORE_LINKS.some((l) => pathname === l.href)
 
   return (
@@ -41,7 +40,10 @@ export default function Header() {
             <Link
               key={href}
               href={href}
-              className={cn('btn btn-ghost text-sm', pathname === href && 'text-nav-active')}
+              className={cn(
+                'btn btn-ghost text-sm',
+                (href === '/series' ? seriesActive : pathname === href) && 'text-nav-active'
+              )}
             >
               {label}
             </Link>
@@ -52,7 +54,7 @@ export default function Header() {
               type="button"
               className={cn(
                 'btn btn-ghost text-sm flex items-center gap-1',
-                (moreActive || activeCategoryId) && 'text-nav-active'
+                moreActive && 'text-nav-active'
               )}
             >
               更多
@@ -76,20 +78,16 @@ export default function Header() {
                 </Link>
               ))}
               <div className="my-1 divider" />
-              <p className="text-meta px-3 py-1 mb-0.5">分类</p>
-              {CATEGORIES.map((cat) => (
-                <Link
-                  key={cat.id}
-                  href={`/${cat.id}`}
-                  className={cn(
-                    'flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-[var(--bg-surface)] transition-colors text-[var(--text-secondary)]',
-                    pathname === `/${cat.id}` && 'text-nav-active'
-                  )}
-                >
-                  <span>{cat.icon}</span>
-                  <span>{cat.name}</span>
-                </Link>
-              ))}
+              <Link
+                href="/series"
+                className={cn(
+                  'flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-[var(--bg-surface)] transition-colors text-[var(--text-secondary)]',
+                  seriesActive && 'text-nav-active'
+                )}
+              >
+                <BookMarked size={15} />
+                <span>全部专题</span>
+              </Link>
             </div>
           </div>
         </nav>
@@ -148,18 +146,6 @@ export default function Header() {
               >
                 <Icon size={15} className="mr-1" />
                 {label}
-              </Link>
-            ))}
-            <div className="my-1 divider" />
-            <p className="text-meta px-2 mb-1">分类</p>
-            {CATEGORIES.map((cat) => (
-              <Link
-                key={cat.id}
-                href={`/${cat.id}`}
-                className="btn btn-ghost text-sm justify-start"
-                onClick={() => setMenuOpen(false)}
-              >
-                <span>{cat.icon}</span> {cat.name}
               </Link>
             ))}
           </nav>

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard, FileText, PenSquare, Paperclip,
-  Settings, LogOut, ScrollText, ExternalLink,
+  Settings, LogOut, ScrollText, ExternalLink, Upload, Tags, Library,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ThemeSwitcher from '@/components/ui/ThemeSwitcher'
@@ -13,7 +13,10 @@ import ThemeSwitcher from '@/components/ui/ThemeSwitcher'
 const NAV_ITEMS = [
   { href: '/admin/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { href: '/admin/posts', label: '笔记管理', icon: FileText },
+  { href: '/admin/upload', label: '上传笔记', icon: Upload },
   { href: '/admin/editor', label: '新建笔记', icon: PenSquare },
+  { href: '/admin/series', label: '专题管理', icon: Library },
+  { href: '/admin/tags', label: '标签管理', icon: Tags },
   { href: '/admin/files', label: '附件管理', icon: Paperclip },
   { href: '/admin/settings', label: '设置', icon: Settings },
 ]

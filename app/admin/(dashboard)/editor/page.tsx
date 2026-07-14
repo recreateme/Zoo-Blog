@@ -3,11 +3,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Save, Sparkles, Loader2, Tag, RotateCcw } from 'lucide-react'
-import { CATEGORIES } from '@/lib/categories'
 import { generateSlug, computePostStats, formatWordCount } from '@/lib/utils'
 import MonacoEditor, { type MonacoEditorHandle } from '@/components/editor/MonacoEditor'
 import EditorAttachToolbar from '@/components/editor/EditorAttachToolbar'
-import EditorSeriesFields from '@/components/editor/EditorSeriesFields'
+import EditorSeriesFields, {
+  type SeriesMembershipField,
+} from '@/components/editor/EditorSeriesFields'
 import EditorOutlineFields from '@/components/editor/EditorOutlineFields'
 
 const DEFAULT_CONTENT = `# 笔记标题
@@ -26,10 +27,9 @@ export default function NewEditorPage() {
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [content, setContent] = useState(DEFAULT_CONTENT)
-  const [category, setCategory] = useState('others')
   const [subcategory, setSubcategory] = useState('')
-  const [series, setSeries] = useState('')
-  const [seriesOrder, setSeriesOrder] = useState('')
+  const [memberships, setMemberships] = useState<SeriesMembershipField[]>([])
+  const [coverImage, setCoverImage] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [summary, setSummary] = useState('')
@@ -49,11 +49,11 @@ export default function NewEditorPage() {
   }
 
   useEffect(() => {
-    fetch(`/api/posts?seriesOptions=1&category=${encodeURIComponent(category)}`)
+    fetch('/api/posts?seriesOptions=1')
       .then((r) => r.json())
       .then((data) => setSeriesSuggestions(data.series ?? []))
       .catch(() => setSeriesSuggestions([]))
-  }, [category])
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -96,7 +96,7 @@ export default function NewEditorPage() {
       const res = await fetch('/api/ai/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, title, category }),
+        body: JSON.stringify({ content, title }),
       })
       const data = await res.json()
       if (data.tags?.length) setTags(data.tags)
@@ -115,6 +115,7 @@ export default function NewEditorPage() {
   const handleSave = useCallback(async () => {
     if (!title.trim()) { setError('请输入标题'); return }
     if (!slug.trim()) { setError('请输入 Slug'); return }
+    if (tags.length === 0) { setError('至少需要 1 个标签'); return }
 
     setSaving(true)
     setError('')
@@ -126,10 +127,10 @@ export default function NewEditorPage() {
         id: slug,
         title,
         content,
-        category,
+        category: 'others',
         subcategory: subcategory || undefined,
-        series: series.trim() || undefined,
-        seriesOrder: series.trim() && seriesOrder ? parseInt(seriesOrder, 10) : undefined,
+        seriesMemberships: memberships,
+        coverImage: coverImage.trim() || null,
         tags,
         status,
         summary: summary || undefined,
@@ -144,7 +145,7 @@ export default function NewEditorPage() {
       setError(data.error ?? '保存失败')
     }
     setSaving(false)
-  }, [slug, title, content, category, subcategory, series, seriesOrder, tags, status, summary, outline, router])
+  }, [slug, title, content, subcategory, memberships, coverImage, tags, status, summary, outline, router])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -241,44 +242,25 @@ export default function NewEditorPage() {
               </div>
             </div>
 
-            {/* 分类 */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                分类 *
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="input text-sm"
-              >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 子分类 */}
-            <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                子分类
+                章节名（可选）
               </label>
               <input
                 type="text"
                 value={subcategory}
                 onChange={(e) => setSubcategory(e.target.value)}
                 className="input text-sm"
-                placeholder="可选"
+                placeholder="专题内章节"
               />
             </div>
 
             <EditorSeriesFields
-              series={series}
-              seriesOrder={seriesOrder}
+              memberships={memberships}
               seriesSuggestions={seriesSuggestions}
-              onSeriesChange={setSeries}
-              onSeriesOrderChange={setSeriesOrder}
+              onChange={setMemberships}
+              coverImage={coverImage}
+              onCoverImageChange={setCoverImage}
             />
 
             <EditorOutlineFields items={outline} onChange={setOutline} />
@@ -313,7 +295,7 @@ export default function NewEditorPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                  标签
+                  标签（必填）
                 </label>
                 <button
                   onClick={handleAiTags}

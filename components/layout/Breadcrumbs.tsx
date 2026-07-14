@@ -1,7 +1,5 @@
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import { getCategoryById } from '@/lib/categories'
-import { seriesGroupId, chapterGroupId } from '@/lib/category-groups'
 
 export interface BreadcrumbItem {
   label: string
@@ -9,45 +7,34 @@ export interface BreadcrumbItem {
 }
 
 interface BreadcrumbsProps {
-  categoryId?: string
-  series?: string | null
+  /** 主专题（多专题时取第一项） */
+  seriesId?: string | null
+  seriesName?: string | null
   subcategory?: string | null
   currentTitle: string
 }
 
 export default function Breadcrumbs({
-  categoryId,
-  series,
+  seriesId,
+  seriesName,
   subcategory,
   currentTitle,
 }: BreadcrumbsProps) {
-  const category = categoryId ? getCategoryById(categoryId) : undefined
-  const seriesName = series?.trim() || null
+  const name = seriesName?.trim() || null
   const chapterName = subcategory?.trim() || null
 
   const items: BreadcrumbItem[] = [{ label: '首页', href: '/' }]
 
-  if (category && categoryId) {
-    items.push({ label: category.name, href: `/${category.id}` })
-  } else if (categoryId) {
-    items.push({ label: categoryId, href: `/${categoryId}` })
+  items.push({ label: '专题', href: '/series' })
+
+  if (name && seriesId) {
+    items.push({ label: name, href: `/series/${seriesId}` })
+  } else if (name) {
+    items.push({ label: name })
   }
 
-  if (seriesName && categoryId) {
-    items.push({
-      label: seriesName,
-      href: `/${categoryId}#${seriesGroupId(seriesName)}`,
-    })
-  }
-
-  if (chapterName && categoryId) {
-    items.push({
-      label: chapterName,
-      href:
-        seriesName
-          ? `/${categoryId}#${chapterGroupId(seriesName, chapterName)}`
-          : undefined,
-    })
+  if (chapterName) {
+    items.push({ label: chapterName })
   }
 
   items.push({ label: currentTitle })

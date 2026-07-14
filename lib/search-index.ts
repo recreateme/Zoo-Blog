@@ -60,6 +60,8 @@ interface IndexDocument {
   category: string
   subcategory: string | null
   series: string | null
+  /** PostSeries 成员 ID，用于专题筛选 */
+  seriesIds: string[]
   tags: string[]
   status: string
   publishedAt: number | null
@@ -76,6 +78,7 @@ function postToDocument(post: {
   tags: string
   status: string
   publishedAt: Date | null
+  seriesLinks?: { seriesId: string }[]
 }): IndexDocument {
   return {
     id: post.id,
@@ -85,6 +88,7 @@ function postToDocument(post: {
     category: post.category,
     subcategory: post.subcategory,
     series: post.series,
+    seriesIds: post.seriesLinks?.map((l) => l.seriesId) ?? [],
     tags: parseTags(post.tags),
     status: post.status,
     publishedAt: post.publishedAt ? post.publishedAt.getTime() : null,
@@ -104,7 +108,7 @@ export async function ensureSearchIndex(): Promise<boolean> {
 
   await meili.index(INDEX_UID).updateSettings({
     searchableAttributes: ['title', 'summary', 'content', 'tags'],
-    filterableAttributes: ['category', 'series', 'status', 'tags'],
+    filterableAttributes: ['category', 'series', 'seriesIds', 'status', 'tags'],
     sortableAttributes: ['publishedAt'],
     displayedAttributes: [
       'id',
@@ -113,6 +117,7 @@ export async function ensureSearchIndex(): Promise<boolean> {
       'category',
       'subcategory',
       'series',
+      'seriesIds',
       'tags',
       'status',
       'publishedAt',
@@ -131,7 +136,10 @@ export async function indexPostById(id: string): Promise<void> {
   const meili = getClient()
   if (!meili) return
 
-  const post = await prisma.post.findUnique({ where: { id } })
+  const post = await prisma.post.findUnique({
+    where: { id },
+    include: { seriesLinks: { select: { seriesId: true } } },
+  })
   if (!post) return
 
   await ensureSearchIndex()
@@ -173,7 +181,10 @@ export async function reindexAllPosts(): Promise<{ indexed: number }> {
     await waitForTask(meili, clearTask.taskUid)
   }
 
-  const posts = await prisma.post.findMany({ where: { status: 'PUBLISHED' } })
+  const posts = await prisma.post.findMany({
+    where: { status: 'PUBLISHED' },
+    include: { seriesLinks: { select: { seriesId: true } } },
+  })
   const docs = posts.map(postToDocument)
 
   if (docs.length > 0) {
@@ -238,7 +249,9 @@ function buildMeiliFilter(params: SearchQuery): string[] {
     filters.push(`category = "${escapeMeiliFilterValue(params.category)}"`)
   }
   if (params.series) {
-    filters.push(`series = "${escapeMeiliFilterValue(params.series)}"`)
+    // 优先 seriesIds（专题 ID）；兼容旧字符串系列名
+    const v = escapeMeiliFilterValue(params.series)
+    filters.push(`(seriesIds = "${v}" OR series = "${v}")`)
   }
   if (params.tag) {
     filters.push(`tags = "${escapeMeiliFilterValue(params.tag)}"`)
@@ -330,10 +343,15 @@ async function searchWithSqlite(params: SearchQuery): Promise<SearchResponse> {
   const where: Prisma.PostWhereInput = { status: 'PUBLISHED' }
 
   if (category) where.category = category
-  if (series) where.series = series
+  if (series) {
+    where.OR = [
+      { seriesLinks: { some: { seriesId: series } } },
+      { series },
+    ]
+  }
 
   if (q || tag) {
-    const conditions = []
+    const conditions: Prisma.PostWhereInput[] = []
     if (q) {
       conditions.push(
         { title: { contains: q } },
@@ -346,7 +364,13 @@ async function searchWithSqlite(params: SearchQuery): Promise<SearchResponse> {
       conditions.push({ tags: { contains: `"${tag}"` } })
     }
     if (conditions.length > 0) {
-      where.OR = conditions
+      // 与专题筛选叠加：既满足 series，又匹配关键词
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: conditions }]
+        delete where.OR
+      } else {
+        where.OR = conditions
+      }
     }
   } else if (!recent && !category && !series) {
     return { posts: [], total: 0, engine: 'sqlite' }

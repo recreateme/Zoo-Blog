@@ -1,3 +1,9 @@
+/**
+ * @deprecated 公开站已改为专题 `/series`；本文件仅用于：
+ * - 旧 `/{category}` → `/series/{id}` 重定向
+ * - 管理端/迁移兼容
+ * 阶段 E 末期可删除。
+ */
 import { Category } from '@/types'
 
 export const CATEGORIES: Category[] = [

@@ -1,6 +1,5 @@
 import prisma from '@/lib/db'
-import { getCategoryById } from '@/lib/categories'
-import { seriesGroupId, chapterGroupId } from '@/lib/category-groups'
+import { chapterGroupId } from '@/lib/category-groups'
 
 export interface SeriesChapterItem {
   title: string
@@ -10,6 +9,9 @@ export interface SeriesChapterItem {
 
 export interface SeriesCatalogItem {
   name: string
+  /** 专题 slug */
+  id: string
+  /** @deprecated 兼容旧字段，等同 id */
   category: string
   categoryName: string
   categoryIcon: string
@@ -27,66 +29,48 @@ function sortChapters(
   })
 }
 
-/** 全站已发布教程汇总（侧栏、首页用），含章节嵌套 */
+/** 全站已发布专题汇总（侧栏、首页用），基于 PostSeries */
 export async function getSeriesCatalog(limit = 8): Promise<SeriesCatalogItem[]> {
-  const posts = await prisma.post.findMany({
-    where: { status: 'PUBLISHED', series: { not: null } },
-    select: {
-      series: true,
-      subcategory: true,
-      category: true,
-      seriesOrder: true,
+  const seriesRows = await prisma.series.findMany({
+    include: {
+      posts: {
+        where: { post: { status: 'PUBLISHED' } },
+        select: {
+          order: true,
+          post: { select: { subcategory: true } },
+        },
+      },
     },
-    orderBy: [{ category: 'asc' }, { series: 'asc' }, { seriesOrder: 'asc' }],
   })
 
-  type ChapterAcc = { count: number; minOrder: number }
-  type SeriesAcc = {
-    category: string
-    count: number
-    chapters: Map<string, ChapterAcc>
-  }
+  const items: SeriesCatalogItem[] = []
 
-  const map = new Map<string, SeriesAcc>()
-
-  for (const p of posts) {
-    const name = p.series?.trim()
-    if (!name) continue
-    const key = `${p.category}::${name}`
-    let acc = map.get(key)
-    if (!acc) {
-      acc = { category: p.category, count: 0, chapters: new Map() }
-      map.set(key, acc)
-    }
-    acc.count++
-    const order = p.seriesOrder ?? 999_999
-    const chapter = p.subcategory?.trim()
-    if (chapter) {
-      const ch = acc.chapters.get(chapter) ?? { count: 0, minOrder: order }
+  for (const s of seriesRows) {
+    if (s.posts.length === 0) continue
+    const chapters = new Map<string, { count: number; minOrder: number }>()
+    for (const link of s.posts) {
+      const chapter = link.post.subcategory?.trim()
+      if (!chapter) continue
+      const order = link.order ?? 999_999
+      const ch = chapters.get(chapter) ?? { count: 0, minOrder: order }
       ch.count++
       ch.minOrder = Math.min(ch.minOrder, order)
-      acc.chapters.set(chapter, ch)
+      chapters.set(chapter, ch)
     }
-  }
-
-  const items: SeriesCatalogItem[] = []
-  for (const [key, data] of Array.from(map.entries())) {
-    const name = key.split('::').slice(1).join('::')
-    const cat = getCategoryById(data.category)
-    const chapters = sortChapters(Array.from(data.chapters.entries())).map(([title, ch]) => ({
-      title,
-      postCount: ch.count,
-      href: `/${data.category}#${chapterGroupId(name, title)}`,
-    }))
 
     items.push({
-      name,
-      category: data.category,
-      categoryName: cat?.name ?? data.category,
-      categoryIcon: cat?.icon ?? '📁',
-      postCount: data.count,
-      href: `/${data.category}#${seriesGroupId(name)}`,
-      chapters,
+      id: s.id,
+      name: s.name,
+      category: s.id,
+      categoryName: s.name,
+      categoryIcon: '📚',
+      postCount: s.posts.length,
+      href: `/series/${s.id}`,
+      chapters: sortChapters(Array.from(chapters.entries())).map(([title, ch]) => ({
+        title,
+        postCount: ch.count,
+        href: `/series/${s.id}#${chapterGroupId(s.name, title)}`,
+      })),
     })
   }
 

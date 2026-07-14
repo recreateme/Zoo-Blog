@@ -2,7 +2,11 @@ import { unstable_cache } from 'next/cache'
 import prisma from '@/lib/db'
 import { parseTags } from '@/lib/utils'
 import { CACHE_TAG, PAGE_REVALIDATE } from '@/lib/cache-tags'
-import { getPostAdjacency, getSeriesPosts } from '@/lib/post-navigation'
+import {
+  getPostAdjacencyBySeriesId,
+  getSeriesPosts,
+  getSeriesPostsById,
+} from '@/lib/post-navigation'
 import { getSeriesCatalog } from '@/lib/series-catalog'
 import { buildWikiSlugMap } from '@/lib/wiki-links'
 import type { PostMeta } from '@/types'
@@ -16,6 +20,7 @@ const postListSelect = {
   subcategory: true,
   series: true,
   seriesOrder: true,
+  coverImage: true,
   wordCount: true,
   tags: true,
   status: true,
@@ -23,6 +28,12 @@ const postListSelect = {
   viewCount: true,
   createdAt: true,
   publishedAt: true,
+  seriesLinks: {
+    select: {
+      order: true,
+      series: { select: { id: true, name: true } },
+    },
+  },
 } as const
 
 type PostListRow = {
@@ -33,6 +44,7 @@ type PostListRow = {
   subcategory: string | null
   series: string | null
   seriesOrder?: number | null
+  coverImage?: string | null
   wordCount: number | null
   tags: string
   status: string
@@ -40,13 +52,33 @@ type PostListRow = {
   viewCount: number
   createdAt: Date
   publishedAt: Date | null
+  seriesLinks?: { order: number | null; series: { id: string; name: string } }[]
 }
 
 function toPostMeta(p: PostListRow): PostMeta {
+  const seriesList =
+    p.seriesLinks?.map((l) => ({
+      id: l.series.id,
+      name: l.series.name,
+      order: l.order,
+    })) ?? []
   return {
-    ...p,
+    id: p.id,
+    title: p.title,
+    summary: p.summary,
+    category: p.category,
+    subcategory: p.subcategory,
+    series: seriesList[0]?.name ?? p.series,
+    seriesOrder: seriesList[0]?.order ?? p.seriesOrder ?? null,
+    seriesList,
+    coverImage: p.coverImage ?? null,
+    wordCount: p.wordCount,
     tags: parseTags(p.tags),
     status: p.status as 'DRAFT' | 'PUBLISHED',
+    readingTime: p.readingTime,
+    viewCount: p.viewCount,
+    createdAt: p.createdAt,
+    publishedAt: p.publishedAt,
   }
 }
 
@@ -218,14 +250,32 @@ export async function getCategoryPostsPageCached(
   return revivePostList(posts)
 }
 
-export async function getPublishedPostCached(slug: string): Promise<Post | null> {
+export type PublishedPostWithSeries = Post & {
+  seriesLinks: {
+    order: number | null
+    series: { id: string; name: string }
+  }[]
+}
+
+export async function getPublishedPostCached(
+  slug: string
+): Promise<PublishedPostWithSeries | null> {
   const post = await unstable_cache(
     async () => {
       return prisma.post.findUnique({
         where: { id: slug, status: 'PUBLISHED' },
+        include: {
+          seriesLinks: {
+            orderBy: { order: 'asc' },
+            select: {
+              order: true,
+              series: { select: { id: true, name: true } },
+            },
+          },
+        },
       })
     },
-    [`published-post-${slug}`],
+    [`published-post-${slug}-v2`],
     {
       tags: [CACHE_TAG.posts, CACHE_TAG.post(slug)],
       revalidate: PAGE_REVALIDATE.post,
@@ -236,31 +286,36 @@ export async function getPublishedPostCached(slug: string): Promise<Post | null>
 
 export async function getRelatedPostsCached(
   postId: string,
-  category: string,
-  series: string | null
+  seriesIds: string[]
 ): Promise<PostMeta[]> {
-  const key = `related-${postId}-${category}-${series ?? 'none'}`
+  const key = `related-${postId}-${seriesIds.join(',') || 'none'}`
   const related = await unstable_cache(
     async () => {
-      const seriesName = series?.trim() || null
       const rows: PostMeta[] = []
+      const exclude = new Set<string>([postId])
 
-      if (seriesName) {
+      if (seriesIds.length > 0) {
         const inSeries = await prisma.post.findMany({
-          where: { status: 'PUBLISHED', category, series: seriesName, id: { not: postId } },
-          orderBy: [{ seriesOrder: 'asc' }, { publishedAt: 'desc' }],
+          where: {
+            status: 'PUBLISHED',
+            id: { not: postId },
+            seriesLinks: { some: { seriesId: { in: seriesIds } } },
+          },
+          orderBy: { publishedAt: 'desc' },
           take: 4,
           select: postListSelect,
         })
-        rows.push(...inSeries.map((p) => toPostMeta(p)))
+        for (const p of inSeries) {
+          rows.push(toPostMeta(p))
+          exclude.add(p.id)
+        }
       }
 
       if (rows.length < 4) {
         const more = await prisma.post.findMany({
           where: {
             status: 'PUBLISHED',
-            category,
-            id: { notIn: [postId, ...rows.map((p) => p.id)] },
+            id: { notIn: Array.from(exclude) },
           },
           orderBy: { publishedAt: 'desc' },
           take: 4 - rows.length,
@@ -282,12 +337,11 @@ export async function getRelatedPostsCached(
 
 export async function getPostAdjacencyCached(
   postId: string,
-  category: string,
-  series: string | null
+  seriesId: string | null
 ) {
   return unstable_cache(
-    async () => getPostAdjacency(postId, category, series),
-    [`adjacency-${postId}`],
+    async () => getPostAdjacencyBySeriesId(postId, seriesId),
+    [`adjacency-${postId}-${seriesId ?? 'all'}`],
     {
       tags: [CACHE_TAG.posts, CACHE_TAG.post(postId)],
       revalidate: PAGE_REVALIDATE.post,
@@ -295,12 +349,24 @@ export async function getPostAdjacencyCached(
   )()
 }
 
+/** @deprecated 优先 getSeriesPostsByIdCached */
 export async function getSeriesPostsCached(category: string, series: string) {
   return unstable_cache(
     async () => getSeriesPosts(category, series),
     [`series-posts-${category}-${series}`],
     {
       tags: [CACHE_TAG.posts, CACHE_TAG.category(category)],
+      revalidate: PAGE_REVALIDATE.post,
+    }
+  )()
+}
+
+export async function getSeriesPostsByIdCached(seriesId: string) {
+  return unstable_cache(
+    async () => getSeriesPostsById(seriesId),
+    [`series-posts-id-${seriesId}`],
+    {
+      tags: [CACHE_TAG.posts],
       revalidate: PAGE_REVALIDATE.post,
     }
   )()

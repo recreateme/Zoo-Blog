@@ -12,6 +12,7 @@ import matter from 'gray-matter'
 import { type TocItem, type ParsedMarkdown, type MarkdownFrontmatter } from '@/types'
 import { computePostStats } from './utils'
 import { createHeadingSlugger, slugifyHeading } from './heading-slug'
+import { ensureTags, parseSeriesMemberships } from './series-ops'
 
 // ============================================================
 // Markdown → HTML 转换
@@ -111,13 +112,18 @@ export function extractPostMeta(raw: string, filePath: string) {
   const { frontmatter, content } = parseFrontmatter(raw)
   const { readingTime, wordCount } = computePostStats(content)
 
-  const series =
-    typeof frontmatter.series === 'string' && frontmatter.series.trim()
-      ? frontmatter.series.trim()
+  const memberships = parseSeriesMemberships(
+    frontmatter.series,
+    frontmatter.seriesOrder ?? frontmatter.order
+  )
+  const primary = memberships[0] ?? null
+  const series = primary?.name ?? null
+  const seriesOrder = primary?.order ?? null
+
+  const cover =
+    typeof frontmatter.cover === 'string' && frontmatter.cover.trim()
+      ? frontmatter.cover.trim()
       : null
-  const rawOrder = frontmatter.seriesOrder ?? frontmatter.order
-  const seriesOrder =
-    typeof rawOrder === 'number' && Number.isFinite(rawOrder) ? Math.floor(rawOrder) : null
 
   // slug 优先从 frontmatter 取，其次从文件名
   const filename = filePath.split('/').pop()?.replace(/\.md$/, '') ?? 'untitled'
@@ -129,17 +135,27 @@ export function extractPostMeta(raw: string, filePath: string) {
       )
     : []
 
+  const tags = ensureTags(Array.isArray(frontmatter.tags) ? frontmatter.tags : [])
+
+  // 迁移期：仍读 category；新文可省略（空字符串）
+  const category =
+    typeof frontmatter.category === 'string' && frontmatter.category.trim()
+      ? frontmatter.category.trim()
+      : ''
+
   return {
     id,
     title: frontmatter.title ?? 'Untitled',
-    category: frontmatter.category ?? 'others',
+    category,
     subcategory: frontmatter.subcategory ?? null,
-    tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
+    tags,
     status: (frontmatter.status === 'published' ? 'PUBLISHED' : 'DRAFT') as 'DRAFT' | 'PUBLISHED',
     summary: frontmatter.summary ?? null,
     outline,
     series,
     seriesOrder,
+    seriesMemberships: memberships,
+    coverImage: cover,
     readingTime,
     wordCount,
     filePath,

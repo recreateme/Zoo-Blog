@@ -13,12 +13,16 @@ model Post {
   content     String                         // Markdown 原文
   summary     String?                        // AI 生成摘要
   outline     String     @default("[]")      // JSON 字符串数组，文首要点
-  category    String
+  /// @deprecated 迁移至 Series；保留空字符串兼容旧查询
+  category    String     @default("")
   subcategory String?
-  series      String?                        // 专题/系列名，同系列内可排序
-  seriesOrder Int?                           // 系列内顺序，越小越靠前
+  /// @deprecated 见 PostSeries；同步时仍回填方便兼容
+  series      String?
+  /// @deprecated 见 PostSeries.order
+  seriesOrder Int?
+  coverImage  String?                        // 可选封面 /images/... 或 /uploads/...
   wordCount   Int?                           // 正文字数（中英混合估算）
-  tags        String     @default("[]")      // JSON 字符串数组
+  tags        String     @default("[]")      // JSON 字符串数组，应用层要求 ≥1
   status      String     @default("DRAFT")   // DRAFT | PUBLISHED
   readingTime Int?                           // 分钟
   filePath    String?                        // content/ 目录下的相对路径
@@ -31,11 +35,34 @@ model Post {
   linksFrom   PostLink[] @relation("FromPost")
   linksTo     PostLink[] @relation("ToPost")
   pageViews   PageView[]
+  seriesLinks PostSeries[]
 
   @@index([category])
-  @@index([category, series])
   @@index([status])
   @@index([publishedAt])
+}
+
+/// 专题（原「分类/教程」的主要组织方式）
+model Series {
+  id          String   @id                 // slug
+  name        String   @unique
+  description String?
+  coverImage  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  posts       PostSeries[]
+}
+
+/// 笔记 ↔ 专题（多对多）及专题内顺序
+model PostSeries {
+  postId   String
+  seriesId String
+  order    Int?
+  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  series   Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@id([postId, seriesId])
+  @@index([seriesId, order])
 }
 
 model Attachment {
@@ -91,4 +118,3 @@ model SiteConfig {
   value     String
   updatedAt DateTime @updatedAt
 }
-

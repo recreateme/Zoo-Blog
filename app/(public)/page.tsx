@@ -4,7 +4,6 @@ import { Metadata } from 'next'
 import PostCard from '@/components/post/PostCard'
 import HomeSeries from '@/components/home/HomeSeries'
 import HomeHero from '@/components/home/HomeHero'
-import HomeLatest from '@/components/home/HomeLatest'
 import HomeDiscovery from '@/components/home/HomeDiscovery'
 import Sidebar from '@/components/layout/Sidebar'
 import EmptyState from '@/components/ui/EmptyState'
@@ -12,11 +11,11 @@ import { buildWebSiteJsonLd, defaultOgImageUrl } from '@/lib/seo'
 import { getSiteName, getSiteDescription, HOME_NAV_LABEL } from '@/lib/site'
 import JsonLd from '@/components/seo/JsonLd'
 import {
-  getHomePostsPage,
   getHomePostsPageFiltered,
   getHomeSummaryCached,
   getSidebarDataCached,
 } from '@/lib/cached-queries'
+import { listSeriesWithCounts } from '@/lib/series-queries'
 import { PAGE_REVALIDATE } from '@/lib/cache-tags'
 import type { PostMeta } from '@/types'
 
@@ -52,22 +51,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1)
   const activeTag = searchParams.tag?.trim() ?? ''
 
-  const [{ posts, total }, summary, { popularTags }, latestPage] = await Promise.all([
+  const [{ posts, total }, summary, { popularTags }, seriesList] = await Promise.all([
     getHomePostsPageFiltered(page, HOME_PAGE_SIZE, activeTag || undefined),
     getHomeSummaryCached(),
     getSidebarDataCached(),
-    activeTag ? Promise.resolve(null) : getHomePostsPage(1, 1),
+    listSeriesWithCounts(),
   ])
 
   const postMetas: PostMeta[] = posts
-  const latestPost = latestPage?.posts[0] ?? null
 
-  const listPosts =
-    !activeTag && latestPost && page === 1
-      ? postMetas.filter((p) => p.id !== latestPost.id)
-      : postMetas
-
-  const grouped = listPosts.reduce<Record<string, PostMeta[]>>((acc, post) => {
+  const grouped = postMetas.reduce<Record<string, PostMeta[]>>((acc, post) => {
     const date = new Date(post.publishedAt ?? post.createdAt)
     const key = `${date.getFullYear()}年${date.getMonth() + 1}月`
     if (!acc[key]) acc[key] = []
@@ -89,13 +82,46 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <>
       <JsonLd data={buildWebSiteJsonLd()} />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        <div className="flex gap-8 lg:gap-10">
-          <div className="flex-1 min-w-0">
-            <HomeHero />
-
-            <div className="lg:hidden mb-6">
-              <HomeDiscovery popularTags={popularTags} activeTag={activeTag || undefined} />
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-10">
+          <div className="hidden lg:block w-64 xl:w-72 shrink-0 order-1">
+            <div className="sticky top-20">
+              <Suspense fallback={<div className="skeleton h-64 rounded-xl" />}>
+                <Sidebar summary={summary} activeTag={activeTag || undefined} />
+              </Suspense>
             </div>
+          </div>
+
+          <div className="flex-1 min-w-0 order-2">
+            <div className="lg:hidden mb-6">
+              <HomeHero />
+              <div className="mt-5">
+                <HomeDiscovery popularTags={popularTags} activeTag={activeTag || undefined} />
+              </div>
+            </div>
+
+            {seriesList.length > 0 && (
+              <section className="mb-8" aria-label="按专题阅读">
+                <div className="flex items-baseline justify-between gap-3 mb-3">
+                  <h2 className="home-timeline-title">按专题阅读</h2>
+                  <Link href="/series" className="text-meta hover:text-[var(--accent)]">
+                    全部专题
+                  </Link>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {seriesList.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/series/${s.id}`}
+                      className="home-tag home-tag-md"
+                      title={`${s.postCount} 篇`}
+                    >
+                      {s.name}
+                      <span className="home-tag-count">{s.postCount}</span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {activeTag && (
               <div className="home-active-filter mb-6">
@@ -120,23 +146,36 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               />
             ) : (
               <>
-                {!activeTag && latestPost && page === 1 && <HomeLatest post={latestPost} />}
                 {page === 1 && !activeTag && <HomeSeries />}
 
-                {Object.entries(grouped).map(([monthKey, monthPosts]) => (
-                  <section key={monthKey} className="timeline-month animate-fade-in">
-                    <div className="timeline-month-header">
-                      <h2 className="timeline-month-label">{monthKey}</h2>
-                      <span className="text-meta">{monthPosts.length} 篇</span>
-                    </div>
+                <section className="home-timeline" aria-label="全部笔记">
+                  <header className="home-timeline-header">
+                    <h2 className="home-timeline-title">全部笔记</h2>
+                    <p className="text-meta">按发布时间排序，最新在前</p>
+                  </header>
 
-                    <div className="home-post-list">
-                      {monthPosts.map((post) => (
-                        <PostCard key={post.id} post={post} variant="compact" />
-                      ))}
-                    </div>
-                  </section>
-                ))}
+                  {Object.entries(grouped).map(([monthKey, monthPosts], monthIndex) => (
+                    <section key={monthKey} className="timeline-month animate-fade-in">
+                      <div className="timeline-month-header">
+                        <h3 className="timeline-month-label">{monthKey}</h3>
+                        <span className="text-meta">{monthPosts.length} 篇</span>
+                      </div>
+
+                      <div className="home-post-list">
+                        {monthPosts.map((post, i) => (
+                          <PostCard
+                            key={post.id}
+                            post={post}
+                            variant="compact"
+                            prominent
+                            hideCategory
+                            isLatest={page === 1 && !activeTag && monthIndex === 0 && i === 0}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </section>
 
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between pt-6 border-t border-[var(--border-subtle)]">
@@ -160,14 +199,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 )}
               </>
             )}
-          </div>
-
-          <div className="hidden lg:block w-64 xl:w-72 shrink-0">
-            <div className="sticky top-20">
-              <Suspense fallback={<div className="skeleton h-64 rounded-xl" />}>
-                <Sidebar summary={summary} activeTag={activeTag || undefined} />
-              </Suspense>
-            </div>
           </div>
         </div>
       </div>

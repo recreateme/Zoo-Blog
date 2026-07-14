@@ -12,9 +12,13 @@ describe('reserved-paths', () => {
     expect(isReservedPath('ASK')).toBe(true)
   })
 
-  it('allows category slugs', () => {
+  it('allows topic slugs', () => {
     expect(isReservedPath('ai')).toBe(false)
     expect(isReservedPath('web-dev')).toBe(false)
+  })
+
+  it('blocks series index path', () => {
+    expect(isReservedPath('series')).toBe(true)
   })
 
   it('includes feed paths', () => {

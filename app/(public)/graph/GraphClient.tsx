@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Network, Play, Pause, SlidersHorizontal } from 'lucide-react'
-import { CATEGORIES } from '@/lib/categories'
 import { cn } from '@/lib/utils'
 import KnowledgeGraph from '@/components/graph/KnowledgeGraph'
 import EmptyState from '@/components/ui/EmptyState'
@@ -88,14 +87,7 @@ export default function GraphClient() {
     return { nodes: filtered.nodes.length, links: filtered.links.length }
   }, [loaded, payload, view, timelineStep, filters])
 
-  const hasActiveFilters = Boolean(filters.category || filters.series || filters.hideIsolated)
-
-  const toggleCategory = (catId: string) => {
-    setFilters((f) => ({
-      ...f,
-      category: f.category === catId ? undefined : catId,
-    }))
-  }
+  const hasActiveFilters = Boolean(filters.series || filters.hideIsolated)
 
   const setSeries = (series: string) => {
     setFilters((f) => ({
@@ -155,22 +147,6 @@ export default function GraphClient() {
       {loaded && !showEmpty && (
         <div className="graph-filters">
           <SlidersHorizontal size={14} className="shrink-0 text-meta" />
-          <div className="graph-filter-chips">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => toggleCategory(cat.id)}
-                className={cn(
-                  'badge badge-category graph-filter-chip',
-                  `badge-cat-${cat.id}`,
-                  filters.category === cat.id && 'graph-filter-chip-active'
-                )}
-              >
-                {cat.icon} {cat.name}
-              </button>
-            ))}
-          </div>
           {seriesOptions.length > 0 && (
             <select
               value={filters.series ?? ''}

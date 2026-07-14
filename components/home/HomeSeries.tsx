@@ -26,7 +26,7 @@ export default async function HomeSeries() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {series.map((item) => (
           <Link
-            key={`${item.category}-${item.name}`}
+            key={item.id}
             href={item.href}
             className="group rounded-xl p-4 transition-colors hover:bg-[var(--bg-surface)]"
             style={{
@@ -40,9 +40,7 @@ export default async function HomeSeries() {
                   {item.name}
                 </p>
                 <p className="text-xs mt-1 flex items-center gap-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                  <span>{item.categoryIcon}</span>
-                  <span>{item.categoryName}</span>
-                  <span>· {item.postCount} 篇</span>
+                  <span>{item.postCount} 篇</span>
                 </p>
               </div>
               <ChevronRight

@@ -1,5 +1,3 @@
-import { getCategoryById } from '@/lib/categories'
-import { seriesGroupId, chapterGroupId } from '@/lib/category-groups'
 import { getSiteName as resolveSiteName } from '@/lib/site'
 
 export function getSiteUrl(): string {
@@ -38,19 +36,21 @@ export interface ArticleJsonLdInput {
   title: string
   summary: string | null
   content: string
-  category: string
   publishedAt: Date | null
   updatedAt: Date
   tags: string[]
-  series?: string | null
+  /** 主专题名（articleSection） */
+  seriesName?: string | null
+  coverImage?: string | null
   subcategory?: string | null
 }
 
 export function buildArticleJsonLd(post: ArticleJsonLdInput) {
   const siteUrl = getSiteUrl()
-  const cat = getCategoryById(post.category)
   const image =
-    extractOgImageFromMarkdown(post.content) ?? defaultOgImageUrl()
+    (post.coverImage ? absoluteUrl(post.coverImage) : null) ??
+    extractOgImageFromMarkdown(post.content) ??
+    defaultOgImageUrl()
 
   return {
     '@context': 'https://schema.org',
@@ -73,7 +73,7 @@ export function buildArticleJsonLd(post: ArticleJsonLdInput) {
       },
     },
     mainEntityOfPage: `${siteUrl}/post/${post.id}`,
-    articleSection: cat?.name ?? post.category,
+    articleSection: post.seriesName ?? undefined,
     keywords: post.tags.join(', ') || undefined,
   }
 }
@@ -81,7 +81,6 @@ export function buildArticleJsonLd(post: ArticleJsonLdInput) {
 export function buildBreadcrumbJsonLd(
   items: { name: string; url?: string }[]
 ) {
-  const siteUrl = getSiteUrl()
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -96,28 +95,23 @@ export function buildBreadcrumbJsonLd(
 
 export function buildPostBreadcrumbItems(post: {
   title: string
-  category: string
-  series?: string | null
+  seriesId?: string | null
+  seriesName?: string | null
   subcategory?: string | null
 }) {
-  const cat = getCategoryById(post.category)
   const items: { name: string; url?: string }[] = [
     { name: '首页', url: '/' },
-    { name: cat?.name ?? post.category, url: `/${post.category}` },
+    { name: '专题', url: '/series' },
   ]
-  const series = post.series?.trim()
-  if (series) {
-    items.push({
-      name: series,
-      url: `/${post.category}#${seriesGroupId(series)}`,
-    })
+  const seriesName = post.seriesName?.trim()
+  if (seriesName && post.seriesId) {
+    items.push({ name: seriesName, url: `/series/${post.seriesId}` })
+  } else if (seriesName) {
+    items.push({ name: seriesName })
   }
   const chapter = post.subcategory?.trim()
-  if (chapter && series) {
-    items.push({
-      name: chapter,
-      url: `/${post.category}#${chapterGroupId(series, chapter)}`,
-    })
+  if (chapter) {
+    items.push({ name: chapter })
   }
   items.push({ name: post.title })
   return items
@@ -142,17 +136,29 @@ export function buildWebSiteJsonLd() {
   }
 }
 
-export function buildCategoryJsonLd(categoryId: string, postCount: number) {
-  const cat = getCategoryById(categoryId)
-  if (!cat) return null
+export function buildSeriesJsonLd(series: {
+  id: string
+  name: string
+  description?: string | null
+  postCount: number
+}) {
   return {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: cat.name,
-    description: cat.description,
-    url: absoluteUrl(`/${categoryId}`),
-    numberOfItems: postCount,
+    name: series.name,
+    description: series.description ?? undefined,
+    url: absoluteUrl(`/series/${series.id}`),
+    numberOfItems: series.postCount,
   }
+}
+
+/** @deprecated 使用 buildSeriesJsonLd */
+export function buildCategoryJsonLd(categoryId: string, postCount: number) {
+  return buildSeriesJsonLd({
+    id: categoryId,
+    name: categoryId,
+    postCount,
+  })
 }
 
 export function buildArticleOpenGraph(post: {
@@ -162,8 +168,12 @@ export function buildArticleOpenGraph(post: {
   id: string
   publishedAt: Date | null
   tags: string[]
+  coverImage?: string | null
 }) {
-  const image = extractOgImageFromMarkdown(post.content) ?? defaultOgImageUrl()
+  const image =
+    (post.coverImage ? absoluteUrl(post.coverImage) : null) ??
+    extractOgImageFromMarkdown(post.content) ??
+    defaultOgImageUrl()
   const url = absoluteUrl(`/post/${post.id}`)
   return {
     title: post.title,
@@ -180,8 +190,12 @@ export function buildTwitterCard(post: {
   title: string
   summary: string | null
   content: string
+  coverImage?: string | null
 }) {
-  const image = extractOgImageFromMarkdown(post.content) ?? defaultOgImageUrl()
+  const image =
+    (post.coverImage ? absoluteUrl(post.coverImage) : null) ??
+    extractOgImageFromMarkdown(post.content) ??
+    defaultOgImageUrl()
   return {
     card: 'summary_large_image' as const,
     title: post.title,

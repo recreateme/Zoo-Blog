@@ -8,7 +8,7 @@
 
 1. [Frontmatter 规范](#1-frontmatter-规范)
 2. [Markdown 语法扩展](#2-markdown-语法扩展)
-3. [分类与标签](#3-分类与标签)
+3. [专题与标签](#3-专题与标签)
 4. [在线编辑器使用](#4-在线编辑器使用)
 5. [本地写作工作流](#5-本地写作工作流)
 6. [附件插入](#6-附件插入)
@@ -23,41 +23,48 @@
 ```yaml
 ---
 title: 文章标题（必填）
-category: ai              # 分类 ID（必填，见下方分类表）
-subcategory: 第3章 图像滤波   # 章节名（教程内可选；无 series 时作普通子分类）
-series: OpenCV 入门教程       # 教程/系列名（可选）
-order: 12                     # 教程内全局顺序（也可用 seriesOrder），越小越靠前
-tags:                     # 标签列表（可选，也可 AI 生成）
+slug: my-note-slug        # 可选；默认用文件名
+tags:                     # 必填，至少 1 个
   - llm
   - transformer
-  - deep-learning
-status: published         # draft（草稿）或 published（发布），默认 draft
-publishedAt: 2024-01-15   # 发布日期（可选）
-summary: |                # 摘要（可选，也可 AI 生成）
-  这里写一段 100~200 字的摘要，
-  会显示在文章列表和 SEO 描述中。
-outline:                  # 文首要点（可选）
-  - 第一个问题或章节目标
+series:                   # 可选；一篇可属于多个专题
+  - name: OpenCV 入门教程
+    order: 12
+  - name: 传统计算机视觉
+    order: 3
+subcategory: 第3章 图像滤波   # 可选章节名
+cover: /images/covers/xxx.webp  # 可选封面
+status: published         # draft | published
+publishedAt: 2026-07-14
+summary: |
+  这里写一段 100~200 字的摘要。
+outline:
+  - 第一个要点
   - 第二个要点
+# 已废弃：category（旧文仍可同步；公开站已改为 /series）
 ---
 
 # 正文从这里开始
 ```
 
+兼容旧格式：`series: OpenCV 入门教程` + `seriesOrder: 12`（或 `order`）仍可同步，入库后变为单专题成员。
+
 ### Frontmatter 字段说明
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `title` | string | ✅ | 文章标题，显示在列表和详情页 |
-| `category` | string | ✅ | 分类 ID，见下方分类表 |
-| `subcategory` | string | ❌ | 子分类；在教程（`series`）下表示**章节名** |
-| `series` | string | ❌ | 教程/系列名，同分类下多篇可组成系列阅读 |
-| `order` / `seriesOrder` | number | ❌ | 教程内阅读顺序（全书编号，如 1～50） |
-| `tags` | string[] | ❌ | 标签数组，建议 3~6 个 |
-| `status` | enum | ❌ | `draft` 或 `published`，默认草稿 |
-| `publishedAt` | date | ❌ | 发布日期，格式 `YYYY-MM-DD` |
-| `summary` | string | ❌ | 摘要，不填时可在后台用 AI 生成 |
-| `outline` | string[] | ❌ | 文首「本文要点」列表，见下方示例 |
+| `title` | string | ✅ | 文章标题 |
+| `slug` | string | ❌ | URL id；默认取文件名 |
+| `tags` | string[] | ✅ | 至少 1 个；空则同步时补「未贴标签」 |
+| `series` | string 或 `{name, order}[]` | ❌ | 专题归属；多专题用数组 |
+| `order` / `seriesOrder` | number | ❌ | 仅旧字符串 `series` 时的顺序 |
+| `subcategory` | string | ❌ | 专题内章节名（展示用） |
+| `cover` | string | ❌ | 封面路径，如 `/images/...` |
+| `status` | enum | ❌ | `draft` 或 `published` |
+| `publishedAt` | date | ❌ | `YYYY-MM-DD` |
+| `summary` | string | ❌ | 摘要 |
+| `outline` | string[] | ❌ | 文首要点 |
+| `category` | string | ❌ | **已废弃**；旧文兼容读取 |
 
 ---
 
@@ -187,44 +194,42 @@ ORDER BY published_at DESC;
 
 ---
 
-## 3. 分类与标签
+## 3. 专题与标签
 
-### 预设分类
+公开站已**取消预设分类**，浏览入口为专题页 `/series` 与标签筛选。
 
-| 分类 ID | 名称 | 说明 |
-|---------|------|------|
-| `ai` | AI · 人工智能 | 大模型、机器学习、深度学习 |
-| `computer-vision` | 计算机视觉 | CV、图像处理、目标检测 |
-| `huawei-datacom` | 华为数通 | HCIA/HCIP 网络认证 |
-| `web-dev` | Web 开发 | 前端、后端、全栈 |
-| `project-management` | 项目管理 | PMP、敏捷开发 |
-| `life` | 生活笔记 | 读书、随想、日常 |
-| `others` | 其他 | 不便归类的内容 |
+### 标签
 
-### 教程与章节（系列阅读）
+- **必填**，建议 3～6 个；用于搜索、图谱与首页筛选
+- 后台「标签管理」可重命名、合并、删除
 
-适合「一本书」式内容（如 OpenCV 10 章 × 每章 5 篇）：
+### 专题（学习路径）
+
+一篇笔记可属于**多个**专题；同专题内用 `order` 排序。
 
 ```yaml
-category: computer-vision
-series: OpenCV 入门教程      # 教程名 → 面包屑、分类页、侧栏一级
-subcategory: 第3章 图像滤波   # 章节名 → 分类页/侧栏二级嵌套
-order: 12                     # 全书顺序，上一篇/下一篇、目录序号均按此排序
+series:
+  - name: OpenCV 入门教程
+    order: 12
+  - name: 传统计算机视觉
+    order: 3
+subcategory: 第3章 图像滤波   # 可选章节名
 ```
 
 **展示效果：**
 
-- 面包屑：`首页 > 计算机视觉 > OpenCV 入门教程 > 第3章 图像滤波 > 文章标题`
-- 分类页：教程块下按章节折叠列出文章
-- 侧栏「专题」：教程下缩进显示各章节链接
-- 文章页：教程目录按章节分组，非 50 条平铺
+- 面包屑：`首页 > 专题 > OpenCV 入门教程 > 第3章 > 标题`
+- 专题页：按 `order` 分页列表，支持 `?q=` 专题内搜索
+- 侧栏：热门专题入口
+- 文章页：所属专题 chips + 教程目录 / 上下篇
 
 **约定：**
 
-- 有 `series` 时，`subcategory` 表示**章节**；无 `series` 时仍为普通子分类
-- 同一教程内 `series` 字符串须完全一致（含空格、标点）
-- 未标 `subcategory` 的教程文章会归入「未分章节」
-- `order` 与 `seriesOrder` 等价，同步时都会写入数据库
+- 专题名在库中唯一；同步时按名称自动 `ensure` Series 记录
+- `subcategory` 仅作章节展示，不再表示「分类下的子类」
+- 旧 `category` + 字符串 `series` 仍可同步；迁移脚本已把旧分类建成同名专题
+
+后台也可：上传笔记、专题管理、编辑器多选专题。
 
 ---
 

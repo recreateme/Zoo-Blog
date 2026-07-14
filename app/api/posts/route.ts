@@ -7,6 +7,7 @@ import { indexPostById } from '@/lib/search-index'
 import { indexPostById as indexPostVectors } from '@/lib/vector-index'
 import { revalidatePublishedContent } from '@/lib/revalidate-content'
 import { syncPostLinksForContent, buildWikiSlugMap, removePostLinksForIds } from '@/lib/wiki-links'
+import { syncPostSeriesMemberships } from '@/lib/series-ops'
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 
@@ -14,11 +15,20 @@ const CreatePostSchema = z.object({
   id: z.string().min(1).max(100),
   title: z.string().min(1).max(200),
   content: z.string(),
-  category: z.string().min(1),
+  category: z.string().optional().default('others'),
   subcategory: z.string().optional(),
   series: z.string().optional(),
   seriesOrder: z.number().int().optional(),
-  tags: z.array(z.string()).optional().default([]),
+  seriesMemberships: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        order: z.number().int().nullable().optional(),
+      })
+    )
+    .optional(),
+  coverImage: z.string().nullable().optional(),
+  tags: z.array(z.string()).min(1),
   status: z.enum(['DRAFT', 'PUBLISHED']).optional().default('DRAFT'),
   summary: z.string().optional(),
   outline: z.array(z.string()).optional().default([]),
@@ -34,21 +44,16 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get('category')
   const q = searchParams.get('q')?.trim()
   const seriesOptions = searchParams.get('seriesOptions') === '1'
-  const optionsCategory = searchParams.get('category')?.trim()
 
   if (seriesOptions) {
-    const where: Prisma.PostWhereInput = { series: { not: null } }
-    if (optionsCategory) where.category = optionsCategory
-    const rows = await prisma.post.findMany({
-      where,
-      select: { series: true },
-      distinct: ['series'],
-      orderBy: { series: 'asc' },
+    const rows = await prisma.series.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
     })
-    const series = rows
-      .map((r) => r.series?.trim())
-      .filter((s): s is string => !!s)
-    return NextResponse.json({ series })
+    return NextResponse.json({
+      series: rows.map((r) => r.name),
+      seriesList: rows,
+    })
   }
 
   const page = parseInt(searchParams.get('page') ?? '1')
@@ -108,17 +113,27 @@ export async function POST(req: NextRequest) {
 
     const { readingTime, wordCount } = computePostStats(data.content)
     const publishedAt = data.status === 'PUBLISHED' ? new Date() : null
-    const series = data.series?.trim() || null
+    const memberships =
+      data.seriesMemberships?.map((m) => ({
+        name: m.name.trim(),
+        order: m.order ?? null,
+      })) ??
+      (data.series?.trim()
+        ? [{ name: data.series.trim(), order: data.seriesOrder ?? null }]
+        : [])
+    const primary = memberships[0] ?? null
+    const series = primary?.name ?? null
 
     const post = await prisma.post.create({
       data: {
         id: data.id,
         title: data.title,
         content: data.content,
-        category: data.category,
+        category: data.category || 'others',
         subcategory: data.subcategory ?? null,
         series,
-        seriesOrder: series ? (data.seriesOrder ?? null) : null,
+        seriesOrder: primary?.order ?? null,
+        coverImage: data.coverImage ?? null,
         tags: stringifyTags(data.tags),
         status: data.status,
         summary: data.summary ?? null,
@@ -128,6 +143,10 @@ export async function POST(req: NextRequest) {
         publishedAt,
       },
     })
+
+    if (memberships.length > 0) {
+      await syncPostSeriesMemberships(post.id, memberships)
+    }
 
     try {
       await indexPostById(post.id)

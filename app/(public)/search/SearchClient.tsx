@@ -3,47 +3,56 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, X, SlidersHorizontal, LayoutGrid, List } from 'lucide-react'
-import { CATEGORIES } from '@/lib/categories'
 import { cn } from '@/lib/utils'
 import PostCard from '@/components/post/PostCard'
 import EmptyState from '@/components/ui/EmptyState'
 import type { SearchPostMeta } from '@/lib/search-index'
 import type { TagCount } from '@/components/home/HomeDiscovery'
 
-function buildParams(q: string, tag: string, category: string) {
+function buildParams(q: string, tag: string, series: string) {
   const params = new URLSearchParams()
   if (q) params.set('q', q)
   if (tag) params.set('tag', tag)
-  if (category) params.set('category', category)
+  if (series) params.set('series', series)
   return params
 }
 
 type ViewMode = 'list' | 'grid'
 
-interface SearchClientProps {
-  popularTags?: TagCount[]
+export interface SeriesOption {
+  id: string
+  name: string
 }
 
-export default function SearchClient({ popularTags = [] }: SearchClientProps) {
+interface SearchClientProps {
+  popularTags?: TagCount[]
+  seriesOptions?: SeriesOption[]
+}
+
+export default function SearchClient({
+  popularTags = [],
+  seriesOptions = [],
+}: SearchClientProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialQ = searchParams.get('q') ?? ''
   const initialTag = searchParams.get('tag') ?? ''
-  const initialCategory = searchParams.get('category') ?? ''
+  const initialSeries =
+    searchParams.get('series') ?? searchParams.get('category') ?? ''
 
   const [query, setQuery] = useState(initialQ)
   const [selectedTag, setSelectedTag] = useState(initialTag)
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory)
+  const [selectedSeries, setSelectedSeries] = useState(initialSeries)
   const [results, setResults] = useState<SearchPostMeta[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
 
-  const doSearch = useCallback(async (q: string, tag: string, category: string) => {
+  const doSearch = useCallback(async (q: string, tag: string, series: string) => {
     setLoading(true)
     setSearched(true)
     try {
-      const params = buildParams(q, tag, category)
+      const params = buildParams(q, tag, series)
       const res = await fetch(`/api/search?${params}`)
       const data = await res.json()
       setResults(data.posts ?? [])
@@ -55,8 +64,8 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
   }, [])
 
   const syncUrl = useCallback(
-    (q: string, tag: string, category: string) => {
-      const params = buildParams(q, tag, category)
+    (q: string, tag: string, series: string) => {
+      const params = buildParams(q, tag, series)
       const qs = params.toString()
       router.replace(qs ? `/search?${qs}` : '/search')
     },
@@ -64,47 +73,50 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
   )
 
   useEffect(() => {
-    if (initialQ || initialTag || initialCategory) {
-      doSearch(initialQ, initialTag, initialCategory)
+    if (initialQ || initialTag || initialSeries) {
+      doSearch(initialQ, initialTag, initialSeries)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const q = query.trim()
-    if (!q && !selectedTag && !selectedCategory) return
+    if (!q && !selectedTag && !selectedSeries) return
 
     const timer = setTimeout(() => {
-      syncUrl(q, selectedTag, selectedCategory)
-      doSearch(q, selectedTag, selectedCategory)
+      syncUrl(q, selectedTag, selectedSeries)
+      doSearch(q, selectedTag, selectedSeries)
     }, 350)
 
     return () => clearTimeout(timer)
-  }, [query, selectedTag, selectedCategory, doSearch, syncUrl])
+  }, [query, selectedTag, selectedSeries, doSearch, syncUrl])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    syncUrl(query, selectedTag, selectedCategory)
-    doSearch(query, selectedTag, selectedCategory)
+    syncUrl(query, selectedTag, selectedSeries)
+    doSearch(query, selectedTag, selectedSeries)
   }
 
   const toggleTag = (tag: string) => {
     const next = selectedTag === tag ? '' : tag
     setSelectedTag(next)
-    syncUrl(query, next, selectedCategory)
-    doSearch(query, next, selectedCategory)
+    syncUrl(query, next, selectedSeries)
+    doSearch(query, next, selectedSeries)
   }
 
   const clearTag = () => {
     setSelectedTag('')
-    syncUrl(query, '', selectedCategory)
-    doSearch(query, '', selectedCategory)
+    syncUrl(query, '', selectedSeries)
+    doSearch(query, '', selectedSeries)
   }
 
-  const clearCategory = () => {
-    setSelectedCategory('')
+  const clearSeries = () => {
+    setSelectedSeries('')
     syncUrl(query, selectedTag, '')
     doSearch(query, selectedTag, '')
   }
+
+  const seriesLabel =
+    seriesOptions.find((s) => s.id === selectedSeries)?.name ?? selectedSeries
 
   return (
     <div className="search-page">
@@ -158,29 +170,30 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
           </div>
         )}
 
-        <div className="search-filter-row">
-          <SlidersHorizontal size={13} style={{ color: 'var(--text-tertiary)' }} />
-          {CATEGORIES.map((cat) => {
-            const active = selectedCategory === cat.id
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(active ? '' : cat.id)}
-                className={cn(
-                  'badge badge-category search-filter-chip',
-                  `badge-cat-${cat.id}`,
-                  active && 'search-filter-chip-active'
-                )}
-              >
-                {cat.icon} {cat.name}
-              </button>
-            )
-          })}
-        </div>
+        {seriesOptions.length > 0 && (
+          <div className="search-filter-row">
+            <SlidersHorizontal size={13} style={{ color: 'var(--text-tertiary)' }} />
+            {seriesOptions.map((s) => {
+              const active = selectedSeries === s.id
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedSeries(active ? '' : s.id)}
+                  className={cn(
+                    'badge search-filter-chip',
+                    active && 'search-filter-chip-active'
+                  )}
+                >
+                  {s.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </form>
 
-      {(selectedTag || selectedCategory) && (
+      {(selectedTag || selectedSeries) && (
         <div className="flex flex-wrap items-center gap-2 mb-5">
           <span className="text-meta">筛选：</span>
           {selectedTag && (
@@ -194,16 +207,13 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
               <X size={10} />
             </button>
           )}
-          {selectedCategory && (
+          {selectedSeries && (
             <button
               type="button"
-              onClick={clearCategory}
-              className={cn(
-                'badge badge-category search-filter-chip flex items-center gap-1',
-                `badge-cat-${selectedCategory}`
-              )}
+              onClick={clearSeries}
+              className="badge search-filter-chip flex items-center gap-1"
             >
-              {CATEGORIES.find((c) => c.id === selectedCategory)?.name ?? selectedCategory}
+              {seriesLabel}
               <X size={10} />
             </button>
           )}
@@ -221,9 +231,7 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
       {!loading && searched && (
         <>
           <div className="search-results-toolbar">
-            <p className="search-meta mb-0">
-              找到 {results.length} 篇笔记
-            </p>
+            <p className="search-meta mb-0">找到 {results.length} 篇笔记</p>
             <div className="search-view-toggle" role="group" aria-label="结果视图">
               <button
                 type="button"
@@ -256,7 +264,7 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
           ) : viewMode === 'list' ? (
             <div className="search-results-list">
               {results.map((post) => (
-                <PostCard key={post.id} post={post} variant="compact" />
+                <PostCard key={post.id} post={post} variant="compact" hideCategory />
               ))}
             </div>
           ) : (
@@ -272,7 +280,7 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
       {!searched && (
         <EmptyState
           title="输入关键词开始搜索"
-          description="支持标题、正文与标签全文检索，也可点击上方标签或分类快速筛选"
+          description="支持标题、正文与标签全文检索，也可点击上方标签或专题快速筛选"
         />
       )}
     </div>

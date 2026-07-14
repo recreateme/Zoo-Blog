@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { CalendarDays, Clock, Eye, Tag, ExternalLink, Pencil } from 'lucide-react'
 import { parseMarkdown } from '@/lib/markdown'
 import { parseTags, formatDate, formatNumber, formatWordCount } from '@/lib/utils'
-import { getCategoryById } from '@/lib/categories'
 import {
   buildArticleJsonLd,
   buildArticleOpenGraph,
@@ -18,7 +17,7 @@ import {
   getPublishedPostCached,
   getRelatedPostsCached,
   getPostAdjacencyCached,
-  getSeriesPostsCached,
+  getSeriesPostsByIdCached,
   getWikiSlugMapCached,
 } from '@/lib/cached-queries'
 import { PAGE_REVALIDATE } from '@/lib/cache-tags'
@@ -49,8 +48,8 @@ async function getPost(slug: string) {
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
   const post = await getPost(params.slug)
   if (!post) return { title: '文章不存在' }
-  const cat = getCategoryById(post.category)
   const tags = parseTags(post.tags)
+  const primarySeries = post.seriesLinks[0]?.series
   return {
     title: post.title,
     description: post.summary ?? undefined,
@@ -61,15 +60,17 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
       id: post.id,
       publishedAt: post.publishedAt,
       tags,
+      coverImage: post.coverImage,
     }),
     twitter: buildTwitterCard({
       title: post.title,
       summary: post.summary,
       content: post.content,
+      coverImage: post.coverImage,
     }),
-    other: {
-      'article:section': cat?.name ?? post.category,
-    },
+    other: primarySeries
+      ? { 'article:section': primarySeries.name }
+      : undefined,
   }
 }
 
@@ -82,17 +83,21 @@ export default async function PostPage({ params }: PostPageProps) {
 
   const { content: html, toc } = await parseMarkdown(markdownBody)
   const tags = parseTags(post.tags)
-  const category = getCategoryById(post.category)
-
-  const outlineItems = getArticleOutline(post.content, post.summary, post.outline)
   const editUrl = getEditOnGitHubUrl(post.filePath)
+  const outlineItems = getArticleOutline(post.content, post.summary, post.outline)
 
-  const seriesName = post.series?.trim() || null
+  const seriesList = post.seriesLinks.map((l) => ({
+    id: l.series.id,
+    name: l.series.name,
+    order: l.order,
+  }))
+  const primary = seriesList[0] ?? null
+  const seriesIds = seriesList.map((s) => s.id)
 
   const [relatedPosts, adjacency, seriesPosts] = await Promise.all([
-    getRelatedPostsCached(post.id, post.category, post.series),
-    getPostAdjacencyCached(post.id, post.category, post.series),
-    seriesName ? getSeriesPostsCached(post.category, seriesName) : Promise.resolve([]),
+    getRelatedPostsCached(post.id, seriesIds),
+    getPostAdjacencyCached(post.id, primary?.id ?? null),
+    primary ? getSeriesPostsByIdCached(primary.id) : Promise.resolve([]),
   ])
 
   recordView(post.id)
@@ -106,19 +111,21 @@ export default async function PostPage({ params }: PostPageProps) {
             title: post.title,
             summary: post.summary,
             content: post.content,
-            category: post.category,
             publishedAt: post.publishedAt,
             updatedAt: post.updatedAt,
             tags,
-            series: post.series,
+            seriesName: primary?.name,
+            coverImage: post.coverImage,
             subcategory: post.subcategory,
           }),
-          buildBreadcrumbJsonLd(buildPostBreadcrumbItems({
-            title: post.title,
-            category: post.category,
-            series: post.series,
-            subcategory: post.subcategory,
-          })),
+          buildBreadcrumbJsonLd(
+            buildPostBreadcrumbItems({
+              title: post.title,
+              seriesId: primary?.id,
+              seriesName: primary?.name,
+              subcategory: post.subcategory,
+            })
+          ),
         ]}
       />
       <ReadingProgress />
@@ -127,26 +134,27 @@ export default async function PostPage({ params }: PostPageProps) {
         <div className="post-layout">
           <article className="post-article">
             <Breadcrumbs
-              categoryId={post.category}
-              series={post.series}
+              seriesId={primary?.id}
+              seriesName={primary?.name}
               subcategory={post.subcategory}
               currentTitle={post.title}
             />
 
             <header className="post-header">
               <div className="post-badges">
-                <Badge variant="category" categoryId={post.category}>
-                  {category?.name ?? post.category}
-                </Badge>
+                {seriesList.map((s) => (
+                  <Link key={s.id} href={`/series/${s.id}`}>
+                    <Badge>{s.name}</Badge>
+                  </Link>
+                ))}
                 {post.subcategory && <Badge>{post.subcategory}</Badge>}
-                {seriesName && <Badge>{seriesName}</Badge>}
               </div>
 
               <h1 className="post-title">{post.title}</h1>
 
-              {seriesName && seriesPosts.length > 0 && (
+              {primary && seriesPosts.length > 0 && (
                 <SeriesNav
-                  seriesName={seriesName}
+                  seriesName={primary.name}
                   currentId={post.id}
                   posts={seriesPosts}
                 />
@@ -218,7 +226,7 @@ export default async function PostPage({ params }: PostPageProps) {
 
         <PostNav adjacency={adjacency} />
 
-        <RelatedPosts posts={relatedPosts} seriesName={seriesName} />
+        <RelatedPosts posts={relatedPosts} seriesName={primary?.name ?? null} />
       </div>
     </>
   )

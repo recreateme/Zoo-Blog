@@ -22,7 +22,7 @@ content/*.md  ──sync──►  SQLite (Prisma)  ──index──►  Meilis
 
 | Layer | Path | Notes |
 |-------|------|-------|
-| Public pages | `app/(public)/` | Home, category, post, search |
+| Public pages | `app/(public)/` | Home, series, post, search |
 | Admin | `app/admin/` | Editor, posts, settings, files |
 | Sync core | `lib/content-sync.ts` | SHA256 fingerprint, delete/slug drift |
 | Search | `lib/search-index.ts` | Meilisearch first, SQLite fallback |
@@ -34,8 +34,9 @@ content/*.md  ──sync──►  SQLite (Prisma)  ──index──►  Meilis
 
 - **Content source**: `content/` is truth for file-bound posts; admin-only posts have no `filePath`
 - **Delete**: `DELETE /api/posts/[slug]?deleteFile=1` removes MD when file-bound
-- **Categories**: 7 presets in `lib/categories.ts` — do not add without migration plan
-- **Frontmatter**: see `docs/WRITING.md` (`series`, `seriesOrder`, `outline`, tags)
+- **Series**: multi-membership via `Series`/`PostSeries`; public routes `/series`, `/series/[slug]`
+- **Categories**: deprecated (`lib/categories.ts` + `/{id}` → `/series/{id}` redirect only)
+- **Frontmatter**: see `docs/WRITING.md` (multi `series[]`, `cover`, required tags)
 - **Minimize diff**: match existing patterns; no over-engineering
 
 ## Commands

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Save, Sparkles, Loader2, Tag, ExternalLink, ArrowLeft } from 'lucide-react'
+import { Save, Sparkles, Loader2, Tag, ExternalLink, ArrowLeft, Download } from 'lucide-react'
 import Link from 'next/link'
-import { CATEGORIES } from '@/lib/categories'
 import { computePostStats, formatWordCount } from '@/lib/utils'
 import MonacoEditor, { type MonacoEditorHandle } from '@/components/editor/MonacoEditor'
 import EditorAttachToolbar from '@/components/editor/EditorAttachToolbar'
-import EditorSeriesFields from '@/components/editor/EditorSeriesFields'
+import EditorSeriesFields, {
+  type SeriesMembershipField,
+} from '@/components/editor/EditorSeriesFields'
 import EditorOutlineFields from '@/components/editor/EditorOutlineFields'
 
 export default function EditEditorPage() {
@@ -17,10 +18,9 @@ export default function EditEditorPage() {
 
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  const [category, setCategory] = useState('others')
   const [subcategory, setSubcategory] = useState('')
-  const [series, setSeries] = useState('')
-  const [seriesOrder, setSeriesOrder] = useState('')
+  const [memberships, setMemberships] = useState<SeriesMembershipField[]>([])
+  const [coverImage, setCoverImage] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [summary, setSummary] = useState('')
@@ -43,10 +43,25 @@ export default function EditEditorPage() {
         const p = data.post
         setTitle(p.title)
         setContent(p.content)
-        setCategory(p.category)
         setSubcategory(p.subcategory ?? '')
-        setSeries(p.series ?? '')
-        setSeriesOrder(p.seriesOrder != null ? String(p.seriesOrder) : '')
+        setCoverImage(p.coverImage ?? '')
+        if (Array.isArray(p.seriesMemberships) && p.seriesMemberships.length > 0) {
+          setMemberships(
+            p.seriesMemberships.map((m: { name: string; order: number | null }) => ({
+              name: m.name,
+              order: m.order,
+            }))
+          )
+        } else if (p.series?.trim()) {
+          setMemberships([
+            {
+              name: p.series.trim(),
+              order: p.seriesOrder ?? null,
+            },
+          ])
+        } else {
+          setMemberships([])
+        }
         setTags(Array.isArray(p.tags) ? p.tags : [])
         setSummary(p.summary ?? '')
         try {
@@ -62,11 +77,11 @@ export default function EditEditorPage() {
   }, [slug])
 
   useEffect(() => {
-    fetch(`/api/posts?seriesOptions=1&category=${encodeURIComponent(category)}`)
+    fetch('/api/posts?seriesOptions=1')
       .then((r) => r.json())
       .then((data) => setSeriesSuggestions(data.series ?? []))
       .catch(() => setSeriesSuggestions([]))
-  }, [category])
+  }, [])
 
   // 实时生成预览 HTML（500ms 防抖）
   useEffect(() => {
@@ -105,7 +120,7 @@ export default function EditEditorPage() {
       const res = await fetch('/api/ai/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, title, category }),
+        body: JSON.stringify({ content, title }),
       })
       const data = await res.json()
       if (data.tags?.length) setTags(data.tags)
@@ -120,17 +135,23 @@ export default function EditEditorPage() {
   }
 
   const handleSave = useCallback(async () => {
+    if (tags.length === 0) {
+      setError('至少需要 1 个标签')
+      return
+    }
     setSaving(true)
     setError('')
     const res = await fetch(`/api/posts/${slug}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title, content, category,
+        title,
+        content,
         subcategory: subcategory || null,
-        series: series.trim() || null,
-        seriesOrder: series.trim() && seriesOrder ? parseInt(seriesOrder, 10) : null,
-        tags, status,
+        seriesMemberships: memberships,
+        coverImage: coverImage.trim() || null,
+        tags,
+        status,
         summary: summary || null,
         outline,
       }),
@@ -143,7 +164,7 @@ export default function EditEditorPage() {
       setError(data.error ?? '保存失败')
     }
     setSaving(false)
-  }, [slug, title, content, category, subcategory, series, seriesOrder, tags, status, summary, outline])
+  }, [slug, title, content, subcategory, memberships, coverImage, tags, status, summary, outline])
 
   // Ctrl+S 快捷保存
   useEffect(() => {
@@ -197,6 +218,14 @@ export default function EditEditorPage() {
           <ExternalLink size={14} />
         </Link>
 
+        <a
+          href={`/api/posts/${slug}/export`}
+          className="btn btn-ghost p-2"
+          title="下载完整 zip（含图片）"
+        >
+          <Download size={14} />
+        </a>
+
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as 'DRAFT' | 'PUBLISHED')}
@@ -231,25 +260,16 @@ export default function EditEditorPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>分类</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className="input text-sm">
-                {CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>子分类</label>
-              <input type="text" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} className="input text-sm" placeholder="可选" />
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>章节名（可选）</label>
+              <input type="text" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} className="input text-sm" placeholder="专题内章节" />
             </div>
 
             <EditorSeriesFields
-              series={series}
-              seriesOrder={seriesOrder}
+              memberships={memberships}
               seriesSuggestions={seriesSuggestions}
-              onSeriesChange={setSeries}
-              onSeriesOrderChange={setSeriesOrder}
+              onChange={setMemberships}
+              coverImage={coverImage}
+              onCoverImageChange={setCoverImage}
             />
 
             <EditorOutlineFields items={outline} onChange={setOutline} />
@@ -267,7 +287,7 @@ export default function EditEditorPage() {
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>标签</label>
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>标签（必填）</label>
                 <button onClick={handleAiTags} disabled={!!aiLoading} className="flex items-center gap-1 text-xs hover:text-[var(--accent)] transition-colors" style={{ color: 'var(--text-tertiary)' }}>
                   {aiLoading === 'tags' ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
                   AI

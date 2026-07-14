@@ -4,7 +4,31 @@
 
 ---
 
+## [0.5.0] - 2026-07-14
+
+### 专题体系（分类 → 专题）
+
+- Prisma：`Series` / `PostSeries` 多对多 + `coverImage`；`npm run migrate:series`
+- Frontmatter 多专题与封面；content-sync 同步成员；空标签补「未贴标签」
+- 公开站：`/series`、`/series/[slug]`（分页 + 专题内搜索）；旧 `/{category}` 301 到专题
+- 面包屑 / SEO / sitemap / 搜索·图谱筛选改为专题；顶栏与侧栏去掉分类入口
+- 管理端：上传落盘 `content/`、标签/专题管理、zip 导出、编辑器多专题与封面
+- 设置页：推送到 GitHub、部署到 VPS（读 `.deploy.env` / `DEPLOY_HOOK_URL`，密钥不落库）
+
+### 依赖
+
+- 新增 `jszip`（笔记离线导出）
+
+---
+
 ## [0.4.3] - 2026-06-02
+
+### 专题体系（进行中）
+
+- Prisma：`Series` / `PostSeries` 多对多 + `coverImage`；脚本 `npm run migrate:series`
+- Frontmatter 支持多专题与封面；content-sync 同步成员关系；标签为空时补「未贴标签」
+- 公开站：新增 `/series`、`/series/[slug]`（分页 + 专题内搜索）；旧 `/{category}` 重定向至专题
+- 顶栏/侧栏去掉分类入口，改为专题导航；首页展示专题 chips
 
 ### 阅读体验
 
