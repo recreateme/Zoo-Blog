@@ -50,15 +50,18 @@ export async function parseMarkdown(raw: string): Promise<ParsedMarkdown> {
 // 从 Markdown 原文提取目录结构
 // ============================================================
 export function extractToc(markdown: string): TocItem[] {
+  // 去掉围栏代码块，避免 Python/Shell 注释 `# ...` 被当成标题
+  const withoutFenced = markdown.replace(/```[\s\S]*?```/g, '')
   const headingRegex = /^(#{1,4})\s+(.+)$/gm
   const flat: TocItem[] = []
   const slugger = createHeadingSlugger()
   let match: RegExpExecArray | null
 
-  while ((match = headingRegex.exec(markdown)) !== null) {
+  while ((match = headingRegex.exec(withoutFenced)) !== null) {
     const level = match[1].length
     const raw = match[2].trim()
     const text = raw.replace(/[*_`]/g, '').trim()
+    if (!text) continue
     const id = slugifyHeading(raw, slugger)
 
     flat.push({ id, text, level, children: [] })

@@ -12,6 +12,13 @@ describe('markdown', () => {
     expect(toc[0].children[1].id).toBe('first-1')
   })
 
+  it('ignores headings inside fenced code blocks', () => {
+    const md = `# Title\n\n\`\`\`python\n# ROI crop\nx = 1\n\`\`\`\n\n## Real\n`
+    const toc = extractToc(md)
+    expect(toc).toHaveLength(1)
+    expect(toc[0].children.map((c) => c.text)).toEqual(['Real'])
+  })
+
   it('parses frontmatter into post meta', () => {
     const raw = `---
 title: Test Post
