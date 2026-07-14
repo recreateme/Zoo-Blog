@@ -13,6 +13,7 @@ services:
     volumes:
       - ./content:/app/content          # Markdown 内容（Git 管理）
       - ./public/uploads:/app/public/uploads  # 用户上传附件
+      - ./public/images:/app/public/images    # 文章配图（Git 管理）
       - ./prisma:/app/prisma            # 数据库文件
     environment:
       - NODE_ENV=production

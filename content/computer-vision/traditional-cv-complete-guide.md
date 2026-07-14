@@ -1,23 +1,23 @@
 ---
 title: 传统计算机视觉全解：原理拆解、OpenCV 实现与工程组合范式
-slug: traditional-cv-complete
+slug: traditional-cv-complete-guide
 category: computer-vision
 tags:
   - opencv
-  - 传统计算机视觉
-  - 图像处理
+  - traditional-cv
+  - computer-vision
+  - image-processing
+  - feature-extraction
 status: published
 publishedAt: 2026-07-14
 summary: >
   一篇兼顾理论梳理与工程落地的传统视觉算法复习笔记：
-  从像素级操作到几何视觉，从单个算法到可落地流水线。
+  从像素级操作到几何视觉，从单个算法到可直接落地的完整流水线。
 ---
-
-# 传统计算机视觉全解：原理拆解、OpenCV 实现与工程组合范式
 
 > 一篇兼顾理论梳理与工程落地的传统视觉算法复习笔记 —— 从像素级操作到几何视觉，从单个算法到可直接落地的完整流水线。
 
-![cover](/uploads/traditional-cv-cover.png)
+![封面](/images/traditional-cv-cover.png)
 
 ## 引言：为什么在深度学习时代还要聊传统 CV？
 

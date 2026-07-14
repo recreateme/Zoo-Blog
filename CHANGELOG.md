@@ -13,7 +13,7 @@
 
 ### 内容
 
-- 新增计算机视觉长文《传统计算机视觉全解》及封面图（封面位于 `public/uploads/`）
+- 新增计算机视觉长文《传统计算机视觉全解》及封面图（`public/images/traditional-cv-cover.png`）
 
 ### 首页阅读索引（借鉴 pingfan 结构）
 
@@ -25,6 +25,8 @@
 ### 维护与精简
 
 - 分类页改为 `compact` 列表，与首页时间线样式统一；教程/章节分组结构保留
+- 搜索页去掉 SQLite/Meilisearch 引擎提示（Docker 下默认走 Meilisearch）
+- 文章封面图改用 Git 可追踪的 `public/images/`；compose 增加 images 卷挂载
 - 移除 `content-source` 死代码、精简 `types/index.ts` 未引用接口
 - 卸载冗余依赖：`remark`、`tsparticles`、`@tailwindcss/typography`（正文样式由 `globals.css` 的 `.markdown-body` 承担）
 - 修正 `STORAGE_PROVIDER` 文档（移除未实现的 `oss`）

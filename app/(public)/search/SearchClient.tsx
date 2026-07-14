@@ -37,7 +37,6 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
   const [results, setResults] = useState<SearchPostMeta[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
-  const [engine, setEngine] = useState<string>('')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
 
   const doSearch = useCallback(async (q: string, tag: string, category: string) => {
@@ -48,7 +47,6 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
       const res = await fetch(`/api/search?${params}`)
       const data = await res.json()
       setResults(data.posts ?? [])
-      setEngine(data.engine ?? '')
     } catch {
       setResults([])
     } finally {
@@ -220,20 +218,11 @@ export default function SearchClient({ popularTags = [] }: SearchClientProps) {
         </div>
       )}
 
-      {!loading && searched && engine === 'sqlite' && (
-        <div className="search-engine-notice surface-panel">
-          当前使用 SQLite 模糊搜索，中文分词较弱。建议在 `.env` 配置 Meilisearch 后执行{' '}
-          <code className="text-xs font-mono">docker compose up -d meilisearch</code>{' '}
-          以获得更好体验。
-        </div>
-      )}
-
       {!loading && searched && (
         <>
           <div className="search-results-toolbar">
             <p className="search-meta mb-0">
               找到 {results.length} 篇笔记
-              {engine ? ` · ${engine === 'meilisearch' ? 'Meilisearch' : 'SQLite'}` : ''}
             </p>
             <div className="search-view-toggle" role="group" aria-label="结果视图">
               <button
