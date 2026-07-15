@@ -350,10 +350,11 @@ docker compose logs app --tail 80 | grep -i error
 
 ### 管理后台无法登录
 
-1. 确认 `ADMIN_EMAIL`、`ADMIN_PASSWORD`、`NEXTAUTH_SECRET`
-2. `NEXTAUTH_URL` 与浏览器地址完全一致（含 `https://`）
-3. 清除 Cookie 重试
-4. `pm2 logs` 或 `docker compose logs app | grep auth`
+1. 确认 `.env` 中 `ADMIN_EMAIL`、`ADMIN_PASSWORD`、`NEXTAUTH_SECRET` 拼写正确，**引号成对**
+2. 容器内核对：`docker compose exec app printenv ADMIN_EMAIL`（不应带多余 `"`）
+3. `NEXTAUTH_URL` 与浏览器地址栏一致（含协议与端口，如 `http://IP:3000`）
+4. 若库中已有同邮箱 `User`，须使用该用户的 bcrypt 密码，或删掉该行后改回 env 账号
+5. 清除站点 Cookie 后重试；查看 `docker compose logs app --tail=100`
 
 ### 搜索无结果 / 体验差
 

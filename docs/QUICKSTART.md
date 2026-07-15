@@ -151,23 +151,23 @@ docker compose --profile rag up -d --build   # 代码更新后重新构建
 1. 打开 http://localhost:3000/admin/login
 2. 输入 `.env` 中的邮箱和密码
 3. 点击「**新建笔记**」
-4. 填写标题、选择分类，在 Monaco 编辑器中写 Markdown
+4. 填写标题、标签（必填）、可选专题与封面，在 Monaco 编辑器中写 Markdown
 5. 点击「**AI 生成**」自动生成摘要和标签（需要 API Key）
 6. 将状态改为「**发布**」，点击「**保存**」
+7. 也可使用「**上传笔记**」直接把本地 `.md` 写入 `content/`
 
 ### 方式 B：同步本地 Markdown
 
-将 Markdown 放入 `content/` 对应分类目录：
+将 Markdown 放入 `content/`（子目录随意）：
 
 ```
 content/
-├── ai/
-├── web-dev/
-├── huawei-datacom/
+├── notes/
+│   └── my-first-post.md
 └── ...
 ```
 
-文件需包含 frontmatter，详见 [写作指南](WRITING.md#1-frontmatter-规范)。
+文件需包含 frontmatter（`tags` 必填，`series` 可选），详见 [写作指南](WRITING.md#1-frontmatter-规范)。
 
 然后在后台「**设置 → 从文件系统同步**」点击同步，内容即导入数据库并更新搜索/向量索引。
 

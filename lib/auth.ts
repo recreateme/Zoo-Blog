@@ -37,13 +37,15 @@ export const authOptions: NextAuthOptions = {
         }
 
         // 回退：验证环境变量中的管理员账号（首次使用）
-        const adminEmail = process.env.ADMIN_EMAIL
-        const adminPassword = process.env.ADMIN_PASSWORD
+        const adminEmail = process.env.ADMIN_EMAIL?.trim().replace(/^["']|["']$/g, '')
+        const adminPassword = process.env.ADMIN_PASSWORD?.trim().replace(/^["']|["']$/g, '')
+        const inputEmail = credentials.email.trim()
+        const inputPassword = credentials.password
         if (
           adminEmail &&
           adminPassword &&
-          credentials.email === adminEmail &&
-          credentials.password === adminPassword
+          inputEmail === adminEmail &&
+          inputPassword === adminPassword
         ) {
           return { id: 'env-admin', email: adminEmail, name: 'Admin', role: 'ADMIN' }
         }

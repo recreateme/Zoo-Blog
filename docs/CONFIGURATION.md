@@ -75,7 +75,9 @@ ADMIN_EMAIL="admin@example.com"
 ADMIN_PASSWORD="your-secure-password"
 ```
 
-> **安全提示**：生产环境使用强密码和随机 Secret。数据库中已有用户后，可将 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 留空。
+> **写法注意**：请使用成对引号 `KEY="value"`。漏写结尾引号（如 `ADMIN_EMAIL=a@b.com"`）会导致容器读到错误邮箱，登录一直失败。改完后执行：`docker compose up -d --force-recreate app`。
+
+> **安全提示**：生产环境使用强密码和随机 Secret。若 SQLite `User` 表已有同邮箱用户，以数据库 bcrypt 为准（env 明文回退不会生效）。
 
 ---
 
@@ -292,7 +294,7 @@ GET /api/graph?view=tags      # 标签共现
 GET /api/graph?view=timeline  # 按月累积时间演化
 ```
 
-筛选在客户端完成（分类 / 专题 / 隐藏孤立节点），不持久化到 URL（0.4.2）。
+筛选在客户端完成（专题下拉 / 隐藏孤立节点为主；旧 category 字段兼容保留），不持久化到 URL。
 
 图谱依赖：
 

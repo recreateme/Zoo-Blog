@@ -15,6 +15,12 @@
 - 管理端：上传落盘 `content/`、标签/专题管理、zip 导出、编辑器多专题与封面
 - 设置页：推送到 GitHub、部署到 VPS（读 `.deploy.env` / `DEPLOY_HOOK_URL`，密钥不落库）
 
+### 文档与稳健性
+
+- 重写 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：技术栈汇总、目录职责、手动修改速查
+- 更新 README / 写作 / 上传手册 / 配置与运维（含后台登录引号排障）
+- 登录：`ADMIN_*` 环境变量自动 trim 包裹引号，避免 `.env` 格式错误导致无法登录
+
 ### 依赖
 
 - 新增 `jszip`（笔记离线导出）

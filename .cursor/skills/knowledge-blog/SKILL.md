@@ -34,9 +34,9 @@ content/*.md  ──sync──►  SQLite (Prisma)  ──index──►  Meilis
 
 - **Content source**: `content/` is truth for file-bound posts; admin-only posts have no `filePath`
 - **Delete**: `DELETE /api/posts/[slug]?deleteFile=1` removes MD when file-bound
-- **Series**: multi-membership via `Series`/`PostSeries`; public routes `/series`, `/series/[slug]`
-- **Categories**: deprecated (`lib/categories.ts` + `/{id}` → `/series/{id}` redirect only)
-- **Frontmatter**: see `docs/WRITING.md` (multi `series[]`, `cover`, required tags)
+- **Series**: multi-membership via `Series`/`PostSeries`; public `/series`
+- **Auth**: NextAuth env admin credentials — trim surrounding quotes (`lib/auth.ts`)
+- **Docs**: see `docs/ARCHITECTURE.md` (stack + tree + edit map), `docs/WRITING.md`
 - **Minimize diff**: match existing patterns; no over-engineering
 
 ## Commands
