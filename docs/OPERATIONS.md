@@ -356,6 +356,17 @@ docker compose logs app --tail 80 | grep -i error
 4. 若库中已有同邮箱 `User`，须使用该用户的 bcrypt 密码，或删掉该行后改回 env 账号
 5. 清除站点 Cookie 后重试；查看 `docker compose logs app --tail=100`
 
+### 后台上传笔记 / 上传图片「导入失败」
+
+日志出现 `EACCES: permission denied, open '/app/content/...'` 时，是宿主机挂载目录属主为 root，而容器内应用以 `nextjs`（uid 1001）运行，无写权限。在 VPS 上执行：
+
+```bash
+cd /var/www/blog/Zoo-Blog
+chown -R 1001:65533 content public/uploads public/images
+```
+
+`scripts/deploy-vps.py` 在每次部署后会自动执行该修正；若手动在 VPS 上 `git pull` 或以 root 新建文件，需要重新执行上面命令。
+
 ### 搜索无结果 / 体验差
 
 ```bash

@@ -78,6 +78,14 @@ def main() -> int:
         client.close()
         return code
 
+    # 容器内应用以 uid 1001 (nextjs) 运行，git/root 新建的文件会导致
+    # 后台「上传笔记 / 上传图片」EACCES，这里统一修正挂载目录属主
+    run(
+        client,
+        f"cd {repo} && mkdir -p content public/uploads public/images"
+        " && chown -R 1001:65533 content public/uploads public/images",
+    )
+
     code, _, _ = run(
         client,
         f"set -e; cd {repo} && docker compose {compose_args} up -d --build",

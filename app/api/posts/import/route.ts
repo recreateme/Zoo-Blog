@@ -69,7 +69,15 @@ export async function POST(req: NextRequest) {
     const parsed = extractPostMeta(text, file.name)
     const { content: body } = parseFrontmatter(text)
 
-    const slug = (meta.slug?.trim() || parsed.id).replace(/^\/+|\/+$/g, '')
+    // 净化 slug：文件名可能含 + 空格等字符，统一替换为 -，保证 URL 与文件名一致
+    const rawSlug = (meta.slug?.trim() || parsed.id).replace(/^\/+|\/+$/g, '')
+    const slug = rawSlug
+      .replace(/[^a-zA-Z0-9_\u4e00-\u9fff.-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+    if (!slug) {
+      return NextResponse.json({ error: 'Slug 无效，请手动填写' }, { status: 400 })
+    }
     const title = meta.title?.trim() || parsed.title
     const tags = ensureTags(meta.tags?.length ? meta.tags : parsed.tags)
     if (tags.length === 0) {
@@ -171,6 +179,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '元数据无效', details: error.errors }, { status: 400 })
     }
     console.error('Import post error:', error)
-    return NextResponse.json({ error: '导入失败' }, { status: 500 })
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'EACCES' || code === 'EPERM') {
+      return NextResponse.json(
+        { error: '服务器 content/ 目录不可写（权限问题），请联系管理员执行部署脚本修复目录属主' },
+        { status: 500 }
+      )
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: `导入失败：${message}` }, { status: 500 })
   }
 }

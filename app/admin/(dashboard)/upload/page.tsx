@@ -77,9 +77,12 @@ export default function AdminUploadPage() {
         })
       )
       const res = await fetch('/api/posts/import', { method: 'POST', body: form })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data.error || '导入失败')
+        const detail = Array.isArray(data.details)
+          ? `：${data.details.map((d: { message?: string }) => d.message).filter(Boolean).join('；')}`
+          : ''
+        setError(`${data.error || `导入失败（HTTP ${res.status}）`}${detail}`)
         return
       }
       setOk(`已写入 ${data.post.filePath}`)
