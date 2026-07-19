@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Upload, Plus, X } from 'lucide-react'
+import Image from 'next/image'
+import { ImagePlus, Link2, Upload, Plus, X } from 'lucide-react'
 
 type SeriesRow = { name: string; order: number | null }
 
@@ -18,7 +19,10 @@ export default function AdminUploadPage() {
   const [seriesOrder, setSeriesOrder] = useState('')
   const [seriesSuggestions, setSeriesSuggestions] = useState<string[]>([])
   const [subdir, setSubdir] = useState('')
-  const [coverImage, setCoverImage] = useState('')
+  const [coverMode, setCoverMode] = useState<'local' | 'remote'>('local')
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [coverUrl, setCoverUrl] = useState('')
+  const [coverPreview, setCoverPreview] = useState('')
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('PUBLISHED')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -30,6 +34,19 @@ export default function AdminUploadPage() {
       .then((d) => setSeriesSuggestions(d.series ?? []))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (coverMode === 'local' && coverFile) {
+      const objectUrl = URL.createObjectURL(coverFile)
+      setCoverPreview(objectUrl)
+      return () => URL.revokeObjectURL(objectUrl)
+    }
+    setCoverPreview(
+      coverMode === 'remote' && /^https?:\/\//i.test(coverUrl.trim())
+        ? coverUrl.trim()
+        : ''
+    )
+  }, [coverFile, coverMode, coverUrl])
 
   const addTag = () => {
     const t = tagInput.trim().toLowerCase().replace(/\s+/g, '-')
@@ -59,11 +76,27 @@ export default function AdminUploadPage() {
       setError('至少需要 1 个标签')
       return
     }
+    if (coverMode === 'local' && coverFile && coverFile.size > 8 * 1024 * 1024) {
+      setError('封面图片不能超过 8MB')
+      return
+    }
+    if (coverMode === 'remote' && coverUrl.trim()) {
+      try {
+        const url = new URL(coverUrl.trim())
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol')
+      } catch {
+        setError('请输入完整的 http:// 或 https:// 公网图片地址')
+        return
+      }
+    }
 
     setBusy(true)
     try {
       const form = new FormData()
       form.append('file', file)
+      if (coverMode === 'local' && coverFile) {
+        form.append('coverFile', coverFile)
+      }
       form.append(
         'meta',
         JSON.stringify({
@@ -72,7 +105,7 @@ export default function AdminUploadPage() {
           tags,
           status,
           subdir: subdir || undefined,
-          coverImage: coverImage || null,
+          coverImage: coverMode === 'remote' ? coverUrl.trim() || null : null,
           series: seriesRows,
         })
       )
@@ -211,15 +244,70 @@ export default function AdminUploadPage() {
           </div>
         </div>
 
-        <label className="block">
-          <span className="text-meta mb-1.5 block">封面 URL（可选）</span>
-          <input
-            className="input w-full"
-            placeholder="/images/covers/xxx.webp"
-            value={coverImage}
-            onChange={(e) => setCoverImage(e.target.value)}
-          />
-        </label>
+        <div>
+          <div className="mb-2">
+            <span className="text-meta block">封面图片（可选）</span>
+            <span className="text-xs text-muted">
+              图片会转为 WebP 并随文章保存到项目中；导入失败时自动清理
+            </span>
+          </div>
+          <div className="flex gap-2 mb-3" role="group" aria-label="封面来源">
+            <button
+              type="button"
+              className={`btn ${coverMode === 'local' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => {
+                setCoverMode('local')
+                setCoverUrl('')
+              }}
+              aria-pressed={coverMode === 'local'}
+            >
+              <ImagePlus size={14} />
+              本地图片
+            </button>
+            <button
+              type="button"
+              className={`btn ${coverMode === 'remote' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => {
+                setCoverMode('remote')
+                setCoverFile(null)
+              }}
+              aria-pressed={coverMode === 'remote'}
+            >
+              <Link2 size={14} />
+              公网图片
+            </button>
+          </div>
+
+          {coverMode === 'local' ? (
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+              className="input w-full"
+              onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
+            />
+          ) : (
+            <input
+              type="url"
+              className="input w-full"
+              placeholder="https://example.com/cover.jpg"
+              value={coverUrl}
+              onChange={(e) => setCoverUrl(e.target.value)}
+            />
+          )}
+
+          {coverPreview && (
+            <div className="relative mt-3 aspect-[16/9] w-full max-w-md overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+              <Image
+                src={coverPreview}
+                alt="封面预览"
+                fill
+                unoptimized
+                className="object-cover"
+                onError={() => setCoverPreview('')}
+              />
+            </div>
+          )}
+        </div>
 
         <label className="block">
           <span className="text-meta mb-1.5 block">状态</span>

@@ -65,12 +65,16 @@ export function stringifyMarkdownFile(
 export async function writeMarkdownToContent(
   relativePath: string,
   frontmatter: MarkdownFrontmatterWrite,
-  body: string
+  body: string,
+  options: { overwrite?: boolean } = {}
 ): Promise<string> {
   const absolute = resolveContentFilePath(relativePath)
   await fs.mkdir(path.dirname(absolute), { recursive: true })
   const raw = stringifyMarkdownFile(frontmatter, body)
-  await fs.writeFile(absolute, raw, 'utf-8')
+  await fs.writeFile(absolute, raw, {
+    encoding: 'utf-8',
+    flag: options.overwrite === false ? 'wx' : 'w',
+  })
   return relativePath.replace(/\\/g, '/')
 }
 

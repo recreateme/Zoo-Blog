@@ -4,6 +4,15 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { extractPostMeta, parseFrontmatter } from '@/lib/markdown'
 import { buildRelativeContentPath, writeMarkdownToContent } from '@/lib/content-write'
+import { deleteBoundMarkdownFile } from '@/lib/content-source'
+import {
+  CoverImageError,
+  persistPreparedCover,
+  prepareLocalCover,
+  prepareRemoteCover,
+  removePreparedCover,
+  type PreparedCoverImage,
+} from '@/lib/cover-image'
 import {
   ensureTags,
   parseSeriesMemberships,
@@ -49,6 +58,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  let createdPostId: string | null = null
+  let writtenMarkdownPath: string | null = null
+  let persistedCover: PreparedCoverImage | null = null
+
   try {
     const form = await req.formData()
     const file = form.get('file')
@@ -63,6 +76,16 @@ export async function POST(req: NextRequest) {
     let meta = MetaSchema.parse({})
     if (typeof rawMeta === 'string' && rawMeta.trim()) {
       meta = MetaSchema.parse(JSON.parse(rawMeta))
+    }
+    const coverFileValue = form.get('coverFile')
+    const coverFile = coverFileValue instanceof File && coverFileValue.size > 0
+      ? coverFileValue
+      : null
+    if (coverFile && meta.coverImage?.trim()) {
+      return NextResponse.json(
+        { error: '本地封面与公网图片地址只能选择一种' },
+        { status: 400 }
+      )
     }
 
     const text = await file.text()
@@ -89,8 +112,28 @@ export async function POST(req: NextRequest) {
       meta.series?.map((s) => ({ name: s.name, order: s.order ?? null })) ??
       parsed.seriesMemberships
 
-    const coverImage =
-      meta.coverImage !== undefined ? meta.coverImage : parsed.coverImage
+    const coverSource =
+      meta.coverImage !== undefined ? meta.coverImage?.trim() || null : parsed.coverImage
+    let preparedCover: PreparedCoverImage | null = null
+    let coverImage: string | null = null
+    if (coverFile) {
+      preparedCover = await prepareLocalCover(
+        {
+          buffer: Buffer.from(await coverFile.arrayBuffer()),
+          mimeType: coverFile.type,
+        },
+        slug
+      )
+      coverImage = preparedCover.url
+    } else if (coverSource && /^https?:\/\//i.test(coverSource)) {
+      preparedCover = await prepareRemoteCover(coverSource, slug)
+      coverImage = preparedCover.url
+    } else if (coverSource?.startsWith('/')) {
+      // 已在 public/ 中的项目资源无需重复复制
+      coverImage = coverSource
+    } else if (coverSource) {
+      throw new CoverImageError('封面应选择本地图片，或填写完整的 http(s) 公网图片地址')
+    }
     const subcategory =
       meta.subcategory !== undefined ? meta.subcategory : parsed.subcategory
     const summary = meta.summary ?? parsed.summary
@@ -122,8 +165,10 @@ export async function POST(req: NextRequest) {
         cover: coverImage,
         publishedAt,
       },
-      body
+      body,
+      { overwrite: false }
     )
+    writtenMarkdownPath = relativePath
 
     const post = await prisma.post.create({
       data: {
@@ -145,8 +190,13 @@ export async function POST(req: NextRequest) {
         publishedAt,
       },
     })
+    createdPostId = post.id
 
     await syncPostSeriesMemberships(post.id, memberships)
+    if (preparedCover) {
+      await persistPreparedCover(preparedCover)
+      persistedCover = preparedCover
+    }
 
     try {
       await indexPostById(post.id)
@@ -171,18 +221,48 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      post: { id: post.id, title: post.title, filePath: post.filePath },
+      post: {
+        id: post.id,
+        title: post.title,
+        filePath: post.filePath,
+        coverImage: post.coverImage,
+      },
       editUrl: `/admin/editor/${post.id}`,
     })
   } catch (error) {
+    if (createdPostId) {
+      await prisma.post.delete({ where: { id: createdPostId } }).catch((rollbackError) => {
+        console.error(`回滚文章失败 (${createdPostId}):`, rollbackError)
+      })
+    }
+    if (writtenMarkdownPath) {
+      await deleteBoundMarkdownFile(writtenMarkdownPath).catch((rollbackError) => {
+        console.error(`回滚 Markdown 失败 (${writtenMarkdownPath}):`, rollbackError)
+      })
+    }
+    if (persistedCover) {
+      await removePreparedCover(persistedCover).catch((rollbackError) => {
+        console.error(`回滚封面失败 (${persistedCover?.url}):`, rollbackError)
+      })
+    }
+
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: '元数据无效', details: error.errors }, { status: 400 })
     }
+    if (error instanceof CoverImageError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     console.error('Import post error:', error)
     const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'EEXIST') {
+      return NextResponse.json(
+        { error: '目标 Markdown 文件已存在，请更换 Slug 或目标子目录' },
+        { status: 409 }
+      )
+    }
     if (code === 'EACCES' || code === 'EPERM') {
       return NextResponse.json(
-        { error: '服务器 content/ 目录不可写（权限问题），请联系管理员执行部署脚本修复目录属主' },
+        { error: '服务器内容或图片目录不可写（权限问题），请联系管理员执行部署脚本修复目录属主' },
         { status: 500 }
       )
     }
