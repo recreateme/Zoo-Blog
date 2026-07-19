@@ -99,7 +99,7 @@ export default async function SeriesDetailPage({ params, searchParams }: Props) 
         />
       ) : (
         <>
-          <div className="home-post-list">
+          <div className="home-post-list home-post-list-cards">
             {posts.map((post) => (
               <PostCard key={post.id} post={post} variant="compact" prominent />
             ))}

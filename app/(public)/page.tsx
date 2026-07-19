@@ -2,7 +2,6 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { Metadata } from 'next'
 import PostCard from '@/components/post/PostCard'
-import HomeSeries from '@/components/home/HomeSeries'
 import HomeHero from '@/components/home/HomeHero'
 import HomeDiscovery from '@/components/home/HomeDiscovery'
 import Sidebar from '@/components/layout/Sidebar'
@@ -15,7 +14,6 @@ import {
   getHomeSummaryCached,
   getSidebarDataCached,
 } from '@/lib/cached-queries'
-import { listSeriesWithCounts } from '@/lib/series-queries'
 import { PAGE_REVALIDATE } from '@/lib/cache-tags'
 import type { PostMeta } from '@/types'
 
@@ -51,11 +49,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1)
   const activeTag = searchParams.tag?.trim() ?? ''
 
-  const [{ posts, total }, summary, { popularTags }, seriesList] = await Promise.all([
+  const [{ posts, total }, summary, { popularTags }] = await Promise.all([
     getHomePostsPageFiltered(page, HOME_PAGE_SIZE, activeTag || undefined),
     getHomeSummaryCached(),
     getSidebarDataCached(),
-    listSeriesWithCounts(),
   ])
 
   const postMetas: PostMeta[] = posts
@@ -99,30 +96,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
             </div>
 
-            {seriesList.length > 0 && (
-              <section className="mb-8" aria-label="按专题阅读">
-                <div className="flex items-baseline justify-between gap-3 mb-3">
-                  <h2 className="home-timeline-title">按专题阅读</h2>
-                  <Link href="/series" className="text-meta hover:text-[var(--accent)]">
-                    全部专题
-                  </Link>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {seriesList.map((s) => (
-                    <Link
-                      key={s.id}
-                      href={`/series/${s.id}`}
-                      className="home-tag home-tag-md"
-                      title={`${s.postCount} 篇`}
-                    >
-                      {s.name}
-                      <span className="home-tag-count">{s.postCount}</span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-
             {activeTag && (
               <div className="home-active-filter mb-6">
                 <span className="text-meta">筛选标签</span>
@@ -146,8 +119,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               />
             ) : (
               <>
-                {page === 1 && !activeTag && <HomeSeries />}
-
                 <section className="home-timeline" aria-label="全部笔记">
                   <header className="home-timeline-header">
                     <h2 className="home-timeline-title">全部笔记</h2>
@@ -161,7 +132,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                         <span className="text-meta">{monthPosts.length} 篇</span>
                       </div>
 
-                      <div className="home-post-list">
+                      <div className="home-post-list home-post-list-cards">
                         {monthPosts.map((post, i) => (
                           <PostCard
                             key={post.id}

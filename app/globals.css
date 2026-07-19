@@ -633,6 +633,11 @@
     flex-direction: column;
   }
 
+  /* 卡片式列表（prominent 卡片）：卡片之间留呼吸空间 */
+  .home-post-list-cards {
+    gap: 0.875rem;
+  }
+
   .home-post-compact-inner {
     border-left: 2px solid color-mix(in srgb, var(--cat-fg, var(--accent)) 55%, transparent);
     padding-left: 0.75rem;
