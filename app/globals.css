@@ -1181,6 +1181,19 @@
     margin-bottom: 1rem;
   }
 
+  .post-cover {
+    margin: 0 0 2rem;
+  }
+
+  .post-cover-image {
+    width: 100%;
+    height: auto;
+    max-height: 28rem;
+    object-fit: cover;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+  }
+
   .post-summary {
     font-family: var(--font-serif);
     font-size: 1.125rem;

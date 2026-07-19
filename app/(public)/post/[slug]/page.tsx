@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import Link from 'next/link'
+import Image from 'next/image'
 import { CalendarDays, Clock, Eye, Tag, ExternalLink, Pencil } from 'lucide-react'
 import { parseMarkdown } from '@/lib/markdown'
 import { parseTags, formatDate, formatNumber, formatWordCount } from '@/lib/utils'
@@ -196,6 +197,20 @@ export default async function PostPage({ params }: PostPageProps) {
                 )}
               </div>
             </header>
+
+            {post.coverImage && (
+              <figure className="post-cover">
+                <Image
+                  src={post.coverImage}
+                  alt={`${post.title} 封面`}
+                  width={1200}
+                  height={675}
+                  priority
+                  unoptimized
+                  className="post-cover-image"
+                />
+              </figure>
+            )}
 
             <MobileToc toc={toc} />
 
