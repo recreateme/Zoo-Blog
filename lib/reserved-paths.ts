@@ -7,6 +7,8 @@ export const RESERVED_PATHS = new Set([
   'admin',
   'api',
   'series',
+  'images',
+  'uploads',
   'rss.xml',
   'sitemap.xml',
   'robots.txt',
