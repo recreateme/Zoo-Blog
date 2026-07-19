@@ -2245,11 +2245,32 @@
   margin: 2em 0;
 }
 
+/* Tailwind preflight 会重置 list-style，这里必须显式恢复列表符号 */
 .markdown-body ul, .markdown-body ol {
   padding-left: 1.5em;
   margin: 1em 0;
 }
+.markdown-body ul { list-style: disc; }
+.markdown-body ul ul { list-style: circle; }
+.markdown-body ul ul ul { list-style: square; }
+.markdown-body ol { list-style: decimal; }
+.markdown-body ol ol { list-style: lower-alpha; }
+.markdown-body ol ol ol { list-style: lower-roman; }
+
 .markdown-body li { margin: 0.35em 0; }
+.markdown-body li::marker { color: var(--accent); }
+.markdown-body li > ul, .markdown-body li > ol { margin: 0.35em 0; }
+
+/* GFM 任务列表（- [ ] / - [x]） */
+.markdown-body ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.5em;
+}
+.markdown-body li.task-list-item input[type='checkbox'] {
+  margin-right: 0.5em;
+  accent-color: var(--accent);
+  vertical-align: -0.1em;
+}
 
 /* 锚点链接 */
 .anchor-link { color: inherit; }
