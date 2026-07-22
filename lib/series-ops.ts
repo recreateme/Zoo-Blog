@@ -135,6 +135,12 @@ export async function migrateNonAsciiSeriesIds(): Promise<{
     }
 
     await prisma.$transaction(async (tx) => {
+      // name 有唯一约束：先腾出名额，再建新 id，再删旧记录
+      const tempName = `${row.name}__migrating__${Date.now()}`
+      await tx.series.update({
+        where: { id: row.id },
+        data: { name: tempName },
+      })
       await tx.series.create({
         data: {
           id: nextId,

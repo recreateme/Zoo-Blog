@@ -2,9 +2,8 @@ import { Metadata } from 'next'
 import Link from 'next/link'
 import { listSeriesWithCounts } from '@/lib/series-queries'
 import { getSiteName } from '@/lib/site'
-import { PAGE_REVALIDATE } from '@/lib/cache-tags'
 
-export const revalidate = PAGE_REVALIDATE.home
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: '专题',
