@@ -33,6 +33,12 @@ describe('series-ops', () => {
   it('slugifySeriesName is stable for ascii', () => {
     expect(slugifySeriesName('OpenCV Notes')).toBe('opencv-notes')
   })
+
+  it('slugifySeriesName uses ascii for chinese names', () => {
+    const id = slugifySeriesName('实用工具')
+    expect(id).toMatch(/^series-[0-9a-z]+$/)
+    expect(slugifySeriesName('实用工具')).toBe(id)
+  })
 })
 
 describe('extractPostMeta series + cover', () => {

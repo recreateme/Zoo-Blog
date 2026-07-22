@@ -9,7 +9,20 @@ export interface SeriesMembershipInput {
 export function slugifySeriesName(name: string): string {
   const slugger = new GithubSlugger()
   const base = slugger.slug(name.trim()) || 'series'
-  return base.slice(0, 80)
+  // github-slugger 对纯中文会保留汉字；Next.js 动态路由可能把 params 以百分号编码传入，
+  // 导致 /series/实用工具 查不到。非 ASCII slug 改为稳定的 ascii 形式。
+  const ascii = base
+    .replace(/[^a-zA-Z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  if (ascii.length >= 2) return ascii.slice(0, 80)
+
+  let hash = 0
+  const src = name.trim()
+  for (let i = 0; i < src.length; i += 1) {
+    hash = (hash * 31 + src.charCodeAt(i)) >>> 0
+  }
+  return `series-${hash.toString(36)}`.slice(0, 80)
 }
 
 export function ensureTags(tags: string[]): string[] {
@@ -94,8 +107,54 @@ export async function syncPostSeriesMemberships(
 }
 
 /**
- * 将旧 classification 迁入专题：若笔记尚无 PostSeries，用 series 字段或 category 建关联。
+ * 将非 ASCII 的专题 id 迁到 slugifySeriesName 生成的 ascii id，
+ * 避免 Next.js 动态路由 params 百分号编码导致专题页 404。
  */
+export async function migrateNonAsciiSeriesIds(): Promise<{
+  renamed: number
+  skipped: number
+}> {
+  const rows = await prisma.series.findMany()
+  let renamed = 0
+  let skipped = 0
+
+  for (const row of rows) {
+    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(row.id)) {
+      skipped += 1
+      continue
+    }
+
+    let nextId = slugifySeriesName(row.name)
+    let n = 0
+    while (
+      nextId === row.id ||
+      (await prisma.series.findUnique({ where: { id: nextId } }))
+    ) {
+      n += 1
+      nextId = `${slugifySeriesName(row.name)}-${n}`
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.series.create({
+        data: {
+          id: nextId,
+          name: row.name,
+          description: row.description,
+          coverImage: row.coverImage,
+          createdAt: row.createdAt,
+        },
+      })
+      await tx.postSeries.updateMany({
+        where: { seriesId: row.id },
+        data: { seriesId: nextId },
+      })
+      await tx.series.delete({ where: { id: row.id } })
+    })
+    renamed += 1
+  }
+
+  return { renamed, skipped }
+}
 export async function migrateLegacyCategoryAndSeries(): Promise<{
   seriesCreated: number
   linksCreated: number

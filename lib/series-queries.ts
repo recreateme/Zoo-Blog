@@ -99,7 +99,25 @@ export async function listSeriesWithCounts(): Promise<SeriesListItem[]> {
 }
 
 export async function getSeriesBySlug(slug: string) {
-  return prisma.series.findUnique({ where: { id: slug } })
+  const candidates: string[] = []
+  const raw = slug?.trim() ?? ''
+  if (raw) candidates.push(raw)
+  try {
+    const decoded = decodeURIComponent(raw)
+    if (decoded && decoded !== raw) candidates.push(decoded)
+  } catch {
+    // 非法 % 序列时保留原值
+  }
+
+  for (const id of candidates) {
+    const byId = await prisma.series.findUnique({ where: { id } })
+    if (byId) return byId
+  }
+  for (const name of candidates) {
+    const byName = await prisma.series.findFirst({ where: { name } })
+    if (byName) return byName
+  }
+  return null
 }
 
 /** 专题内已发布笔记（顺序 + 可选关键词），支持分页 */
