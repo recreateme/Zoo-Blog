@@ -35,16 +35,43 @@ def load_env(path: Path) -> dict[str, str]:
 
 
 def run(client: paramiko.SSHClient, cmd: str, timeout: int = 600) -> tuple[int, str, str]:
+    """执行远程命令；按块读取输出，避免长构建时 paramiko PipeTimeout。"""
     print(f"[vps] $ {cmd}")
-    stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout)
-    out = stdout.read().decode("utf-8", errors="replace")
-    err = stderr.read().decode("utf-8", errors="replace")
-    code = stdout.channel.recv_exit_status()
-    if out.strip():
-        print(out.rstrip())
-    if err.strip():
-        print(err.rstrip(), file=sys.stderr)
-    return code, out, err
+    stdin, stdout, stderr = client.exec_command(cmd, get_pty=True)
+    channel = stdout.channel
+    channel.settimeout(30.0)
+    out_chunks: list[str] = []
+    err_chunks: list[str] = []
+    deadline = time.time() + timeout
+    while True:
+        if channel.recv_ready():
+            chunk = channel.recv(4096).decode("utf-8", errors="replace")
+            out_chunks.append(chunk)
+            print(chunk, end="", flush=True)
+        if channel.recv_stderr_ready():
+            chunk = channel.recv_stderr(4096).decode("utf-8", errors="replace")
+            err_chunks.append(chunk)
+            print(chunk, end="", file=sys.stderr, flush=True)
+        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+            break
+        if time.time() > deadline:
+            try:
+                channel.close()
+            except Exception:
+                pass
+            out = "".join(out_chunks)
+            err = "".join(err_chunks) + "\n[timeout]"
+            print(err, file=sys.stderr)
+            return 124, out, err
+        if not channel.recv_ready() and not channel.recv_stderr_ready():
+            time.sleep(0.4)
+    # drain leftovers
+    while channel.recv_ready():
+        out_chunks.append(channel.recv(4096).decode("utf-8", errors="replace"))
+    while channel.recv_stderr_ready():
+        err_chunks.append(channel.recv_stderr(4096).decode("utf-8", errors="replace"))
+    code = channel.recv_exit_status()
+    return code, "".join(out_chunks), "".join(err_chunks)
 
 
 def main() -> int:
@@ -89,7 +116,7 @@ def main() -> int:
     code, _, _ = run(
         client,
         f"set -e; cd {repo} && docker compose {compose_args} up -d --build",
-        timeout=900,
+        timeout=1800,
     )
     if code != 0:
         client.close()
