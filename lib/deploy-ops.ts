@@ -247,16 +247,21 @@ async function callDeployHook(options: {
       }),
     })
     const text = await res.text()
-    let parsed: { success?: boolean; message?: string; output?: string; error?: string } | null =
-      null
+    type HookPayload = {
+      success?: boolean
+      message?: string
+      output?: string
+      error?: string
+    }
+    let parsed: HookPayload | null = null
     try {
-      parsed = JSON.parse(text) as typeof parsed
+      parsed = JSON.parse(text) as HookPayload
     } catch {
       parsed = null
     }
 
     const success =
-      parsed?.success === true || (parsed?.success == null && res.ok)
+      typeof parsed?.success === 'boolean' ? parsed.success : res.ok
     const message =
       parsed?.message ||
       parsed?.error ||
