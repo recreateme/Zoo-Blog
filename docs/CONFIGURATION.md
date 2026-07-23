@@ -255,7 +255,24 @@ SYNC_SECRET="your-random-sync-secret-min-32-chars"
 
 ---
 
-## Git 备份（可选）
+## Git 推送 / 宿主机 Hook（管理后台）
+
+Docker 内应用推送 GitHub 时，在**宿主机**运行 `scripts/admin-hook-server.py`，并在 `.env` 配置：
+
+```bash
+DEPLOY_HOOK_URL="http://host.docker.internal:9090/"
+DEPLOY_HOOK_TOKEN="your-shared-secret"   # 与 hook 进程一致
+# 可选：仅 git-sync 使用另一地址
+# GIT_SYNC_HOOK_URL="http://host.docker.internal:9090/"
+# GIT_SYNC_FORCE_HOOK=true
+# GIT_REMOTE=origin
+# GIT_BRANCH=main
+# GIT_SYNC_PATHS=content public/images
+```
+
+本地有 `.git` 时可直接点「推送到 GitHub」，无需 Hook。详见 [运维手册](OPERATIONS.md)。
+
+可选内容备份脚本：
 
 ```bash
 GIT_REMOTE_URL="git@github.com:yourname/knowledge-blog-content.git"

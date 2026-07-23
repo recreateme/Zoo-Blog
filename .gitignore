@@ -48,3 +48,5 @@ coverage/
 .sync.env
 .deploy.env
 .tmp-anthropic-skills/
+__pycache__/
+*.pyc

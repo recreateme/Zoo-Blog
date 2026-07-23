@@ -367,6 +367,36 @@ chown -R 1001:65533 content public/uploads public/images
 
 `scripts/deploy-vps.py` 在每次部署后会自动执行该修正；若手动在 VPS 上 `git pull` 或以 root 新建文件，需要重新执行上面命令。
 
+### 管理后台「推送到 GitHub」未就绪 / 失败（Docker）
+
+容器内通常没有可用的 `.git` 与 GitHub 凭据。推荐在**宿主机**跑 Hook：
+
+```bash
+cd /var/www/blog/Zoo-Blog
+# 与 .env 中 DEPLOY_HOOK_TOKEN 保持一致
+export DEPLOY_HOOK_TOKEN='your-shared-secret'
+# 宿主机需已配置 git remote 可 push（SSH key 或 credential）
+nohup python3 scripts/admin-hook-server.py >> /var/log/blog-admin-hook.log 2>&1 &
+```
+
+在服务器 `.env` 增加（然后 `docker compose up -d app`）：
+
+```env
+DEPLOY_HOOK_URL=http://host.docker.internal:9090/
+DEPLOY_HOOK_TOKEN=your-shared-secret
+```
+
+`docker-compose.yml` 已配置 `extra_hosts: host.docker.internal:host-gateway`。
+
+自检：
+
+```bash
+curl -s http://127.0.0.1:9090/health
+# 管理后台「设置」页 GitHub 推送应显示 Hook / 就绪
+```
+
+也可在宿主机直接：`python3 scripts/git_sync.py -m "chore: publish content"`。
+
 ### 搜索无结果 / 体验差
 
 ```bash

@@ -9,6 +9,9 @@ import { cn } from '@/lib/utils'
 
 interface DeployStatus {
   gitReady: boolean
+  gitLocalReady?: boolean
+  gitSyncHookConfigured?: boolean
+  gitSyncMode?: 'local' | 'hook' | 'none'
   vpsReady: boolean
   deployHookConfigured: boolean
   localScriptReady: boolean
@@ -21,6 +24,7 @@ interface DeployStatus {
     finishedAt: string
     actor?: string | null
     output?: string
+    mode?: string
   } | null
 }
 
@@ -64,6 +68,7 @@ export default function SettingsPage() {
   const [deployStatus, setDeployStatus] = useState<DeployStatus | null>(null)
   const [gitSyncing, setGitSyncing] = useState(false)
   const [deploying, setDeploying] = useState(false)
+  const [gitMessage, setGitMessage] = useState('')
 
   const fetchStatus = async () => {
     setLoadingStatus(true)
@@ -84,14 +89,29 @@ export default function SettingsPage() {
   useEffect(() => { fetchStatus() }, [])
 
   const handleGitSync = async () => {
-    if (!window.confirm('将暂存 content/ 与 public/images/ 并推送到 GitHub。继续？')) return
+    const modeHint =
+      deployStatus?.gitSyncMode === 'hook'
+        ? '（经宿主机 Hook）'
+        : deployStatus?.gitSyncMode === 'local'
+          ? '（本机 git）'
+          : ''
+    if (
+      !window.confirm(
+        `将暂存 content/ 与 public/images/ 并推送到 GitHub${modeHint}。继续？`
+      )
+    ) {
+      return
+    }
     setGitSyncing(true)
     setSyncResult(null)
     try {
       const res = await fetch('/api/admin/git-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirm: true }),
+        body: JSON.stringify({
+          confirm: true,
+          message: gitMessage.trim() || undefined,
+        }),
       })
       const data = await res.json()
       setSyncResult({
@@ -100,9 +120,10 @@ export default function SettingsPage() {
       })
       if (data.result) {
         setDeployStatus((prev) =>
-          prev ? { ...prev, last: data.result } : prev
+          prev ? { ...prev, last: data.result, gitReady: prev.gitReady } : prev
         )
       }
+      if (data.success) setGitMessage('')
     } catch {
       setSyncResult({ success: false, message: 'GitHub 推送请求失败' })
     }
@@ -221,7 +242,7 @@ export default function SettingsPage() {
         <p className="admin-page-lead">内容同步、发布、搜索与 RAG（仅管理员）</p>
       </header>
 
-      <section className="admin-section">
+      <section id="publish" className="admin-section">
         <h2 className="admin-section-title">
           <Rocket size={16} style={{ color: 'var(--accent)' }} />
           发布到 GitHub / VPS
@@ -233,7 +254,13 @@ export default function SettingsPage() {
               <span className="text-sm">GitHub 推送</span>
               <StatusBadge
                 enabled={!!deployStatus?.gitReady}
-                onLabel="就绪"
+                onLabel={
+                  deployStatus?.gitSyncMode === 'hook'
+                    ? 'Hook'
+                    : deployStatus?.gitSyncMode === 'local'
+                      ? '本地'
+                      : '就绪'
+                }
                 offLabel="未就绪"
               />
             </div>
@@ -248,11 +275,28 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          <label className="block mb-4 max-w-xl">
+            <span className="text-meta mb-1.5 block text-xs">提交说明（可选）</span>
+            <input
+              className="input w-full text-sm"
+              placeholder="chore: publish content …"
+              value={gitMessage}
+              onChange={(e) => setGitMessage(e.target.value)}
+              maxLength={200}
+              disabled={gitSyncing}
+            />
+          </label>
+
           <div className="flex flex-wrap gap-3 mb-4">
             <button
               onClick={handleGitSync}
               disabled={gitSyncing || !deployStatus?.gitReady}
               className="btn btn-primary text-sm"
+              title={
+                deployStatus?.gitReady
+                  ? undefined
+                  : '请配置本地 git 或 DEPLOY_HOOK_URL'
+              }
             >
               {gitSyncing ? <Loader2 size={14} className="animate-spin" /> : <Github size={14} />}
               {gitSyncing ? '推送中…' : '推送到 GitHub'}
@@ -276,18 +320,32 @@ export default function SettingsPage() {
           )}
 
           {deployStatus?.last && (
-            <p className="text-xs text-meta">
-              上次：{deployStatus.last.action} · {deployStatus.last.message}
-              {deployStatus.last.actor ? ` · ${deployStatus.last.actor}` : ''}
-              {' · '}
-              {new Date(deployStatus.last.finishedAt).toLocaleString('zh-CN')}
-            </p>
+            <div className="text-xs text-meta space-y-2">
+              <p>
+                上次：{deployStatus.last.action}
+                {deployStatus.last.mode ? `/${deployStatus.last.mode}` : ''}
+                {' · '}
+                {deployStatus.last.message}
+                {deployStatus.last.actor ? ` · ${deployStatus.last.actor}` : ''}
+                {' · '}
+                {new Date(deployStatus.last.finishedAt).toLocaleString('zh-CN')}
+              </p>
+              {deployStatus.last.output ? (
+                <pre className="max-h-40 overflow-auto rounded border border-[var(--border)] bg-[var(--bg-secondary)] p-2 text-[11px] whitespace-pre-wrap">
+                  {deployStatus.last.output}
+                </pre>
+              ) : null}
+            </div>
           )}
 
           <div className="mt-4 space-y-1 text-xs text-meta">
             <p>密钥仅存服务器 <code className="text-[11px]">.deploy.env</code> / <code className="text-[11px]">.env</code>，界面不展示密码。</p>
-            <p>Docker 容器内无法 SSH 时，请配置 <code className="text-[11px]">DEPLOY_HOOK_URL</code> 指向宿主机 hook。</p>
-            <p>本地也可继续用 <code className="text-[11px]">publish.bat</code> / <code className="text-[11px]">scripts/publish.ps1</code>。</p>
+            <p>
+              Docker 生产：宿主机运行 <code className="text-[11px]">python scripts/admin-hook-server.py</code>，
+              在 <code className="text-[11px]">.env</code> 配置{' '}
+              <code className="text-[11px]">DEPLOY_HOOK_URL=http://host.docker.internal:9090/</code>。
+            </p>
+            <p>本地开发有 .git 时可直接推送；也可用 <code className="text-[11px]">python scripts/git_sync.py</code>。</p>
           </div>
         </div>
       </section>

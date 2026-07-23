@@ -6,9 +6,17 @@ const ROOT = process.cwd()
 const DEPLOY_ENV_FILE = path.join(ROOT, '.deploy.env')
 
 export type DeployAction = 'git-sync' | 'deploy-vps'
+export type GitSyncMode = 'local' | 'hook' | 'none'
 
 export interface DeployStatus {
+  /** 是否可以发起 GitHub 推送（本地 .git 或 Hook） */
   gitReady: boolean
+  /** 本机工作目录是否含 .git */
+  gitLocalReady: boolean
+  /** 是否配置了可用于 git-sync 的 Hook */
+  gitSyncHookConfigured: boolean
+  /** 实际推送路径 */
+  gitSyncMode: GitSyncMode
   vpsReady: boolean
   deployHookConfigured: boolean
   localScriptReady: boolean
@@ -26,6 +34,7 @@ export interface DeployRunResult {
   startedAt: string
   finishedAt: string
   actor?: string | null
+  mode?: GitSyncMode | 'script'
 }
 
 let lastRun: DeployRunResult | null = null
@@ -73,6 +82,8 @@ export async function loadDeployConfig(): Promise<Record<string, string>> {
     'TRIGGER_SYNC',
     'DEPLOY_HOOK_URL',
     'DEPLOY_HOOK_TOKEN',
+    'GIT_SYNC_HOOK_URL',
+    'GIT_SYNC_FORCE_HOOK',
     'GIT_SYNC_PATHS',
     'GIT_REMOTE',
     'GIT_BRANCH',
@@ -84,6 +95,21 @@ export async function loadDeployConfig(): Promise<Record<string, string>> {
     if (envVal != null && envVal !== '') out[k] = envVal
   }
   return out
+}
+
+function resolveGitSyncHookUrl(cfg: Record<string, string>): string {
+  return (cfg.GIT_SYNC_HOOK_URL?.trim() || cfg.DEPLOY_HOOK_URL?.trim() || '')
+}
+
+function resolveGitSyncMode(
+  hasGitDir: boolean,
+  hookConfigured: boolean,
+  forceHook: boolean
+): GitSyncMode {
+  if (forceHook && hookConfigured) return 'hook'
+  if (hasGitDir) return 'local'
+  if (hookConfigured) return 'hook'
+  return 'none'
 }
 
 export async function getDeployStatus(): Promise<DeployStatus> {
@@ -108,15 +134,26 @@ export async function getDeployStatus(): Promise<DeployStatus> {
     .catch(() => false)
 
   const deployHookConfigured = Boolean(cfg.DEPLOY_HOOK_URL?.trim())
+  const gitSyncHookConfigured = Boolean(resolveGitSyncHookUrl(cfg))
+  const forceHook = (cfg.GIT_SYNC_FORCE_HOOK || '').toLowerCase() === 'true'
+  const gitSyncMode = resolveGitSyncMode(hasGitDir, gitSyncHookConfigured, forceHook)
+  const gitReady = gitSyncMode !== 'none'
+
   const vpsCreds = Boolean(cfg.VPS_HOST?.trim() && cfg.VPS_PASSWORD?.trim())
   const vpsReady = deployHookConfigured || (localScriptReady && vpsCreds)
 
   const hints: string[] = []
-  if (!hasGitDir) hints.push('当前目录不是 git 仓库，无法推送 GitHub')
-  if (!deployEnvFilePresent && !deployHookConfigured && !vpsCreds) {
+  if (gitSyncMode === 'none') {
+    hints.push(
+      'GitHub 推送未就绪：本地无 .git，且未配置 DEPLOY_HOOK_URL / GIT_SYNC_HOOK_URL（Docker 请在宿主机运行 scripts/admin-hook-server.py）'
+    )
+  } else if (gitSyncMode === 'hook') {
+    hints.push('将通过宿主机 Hook 推送 content/ 与 public/images/ 到 GitHub')
+  }
+  if (!deployEnvFilePresent && !deployHookConfigured && !vpsCreds && !gitSyncHookConfigured) {
     hints.push('未找到 .deploy.env，也未配置 DEPLOY_HOOK_URL / VPS_HOST')
   }
-  if (vpsCreds && !localScriptReady) {
+  if (vpsCreds && !localScriptReady && !deployHookConfigured) {
     hints.push('已配置 VPS 凭据，但缺少 scripts/deploy-vps.py')
   }
   if (!vpsReady) {
@@ -124,7 +161,10 @@ export async function getDeployStatus(): Promise<DeployStatus> {
   }
 
   return {
-    gitReady: hasGitDir,
+    gitReady,
+    gitLocalReady: hasGitDir,
+    gitSyncHookConfigured,
+    gitSyncMode,
     vpsReady,
     deployHookConfigured,
     localScriptReady,
@@ -175,33 +215,105 @@ function clip(s: string, max = 8000): string {
   return `${s.slice(0, max)}\n…(truncated)`
 }
 
-/** git add → commit → push（无变更时视为成功跳过） */
-export async function runGitSync(options: {
+async function callDeployHook(options: {
+  url: string
+  token?: string
+  action: DeployAction
+  actor?: string | null
+  message?: string
+  startedAt: string
+  timeoutMs?: number
+}): Promise<DeployRunResult> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (options.token) {
+    headers.Authorization = `Bearer ${options.token}`
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 180_000)
+
+  try {
+    const res = await fetch(options.url, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        action: options.action,
+        message: options.message ?? null,
+        actor: options.actor ?? null,
+        at: options.startedAt,
+      }),
+    })
+    const text = await res.text()
+    let parsed: { success?: boolean; message?: string; output?: string; error?: string } | null =
+      null
+    try {
+      parsed = JSON.parse(text) as typeof parsed
+    } catch {
+      parsed = null
+    }
+
+    const success =
+      parsed?.success === true || (parsed?.success == null && res.ok)
+    const message =
+      parsed?.message ||
+      parsed?.error ||
+      (res.ok ? `已触发 Hook（${options.action}）` : `Hook 返回 ${res.status}`)
+
+    return {
+      action: options.action,
+      success,
+      message,
+      output: clip(parsed?.output || text),
+      startedAt: options.startedAt,
+      finishedAt: new Date().toISOString(),
+      actor: options.actor,
+      mode: 'hook',
+    }
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === 'AbortError'
+    return {
+      action: options.action,
+      success: false,
+      message: aborted ? '调用 Hook 超时' : '调用 Hook 失败',
+      output: clip(String(err)),
+      startedAt: options.startedAt,
+      finishedAt: new Date().toISOString(),
+      actor: options.actor,
+      mode: 'hook',
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function runGitSyncLocal(options: {
   message?: string
   actor?: string | null
+  startedAt: string
+  cfg: Record<string, string>
 }): Promise<DeployRunResult> {
-  const startedAt = new Date().toISOString()
-  const cfg = await loadDeployConfig()
-  const remote = cfg.GIT_REMOTE?.trim() || 'origin'
-  const branch = cfg.GIT_BRANCH?.trim() || 'main'
-  const paths = (cfg.GIT_SYNC_PATHS || 'content public/images')
+  const remote = options.cfg.GIT_REMOTE?.trim() || 'origin'
+  const branch = options.cfg.GIT_BRANCH?.trim() || 'main'
+  const paths = (options.cfg.GIT_SYNC_PATHS || 'content public/images')
     .split(/[\s,]+/)
     .map((p) => p.trim())
     .filter(Boolean)
 
   const add = await runCommand('git', ['add', '--', ...paths], 60_000)
   if (add.code !== 0) {
-    const result: DeployRunResult = {
+    return {
       action: 'git-sync',
       success: false,
       message: 'git add 失败',
       output: clip(add.stderr || add.stdout),
-      startedAt,
+      startedAt: options.startedAt,
       finishedAt: new Date().toISOString(),
       actor: options.actor,
+      mode: 'local',
     }
-    lastRun = result
-    return result
   }
 
   const status = await runCommand('git', ['status', '--porcelain', '--', ...paths], 30_000)
@@ -209,32 +321,29 @@ export async function runGitSync(options: {
   const hasStaged = staged.stdout.trim().length > 0
 
   if (!hasStaged && !status.stdout.trim()) {
-    const result: DeployRunResult = {
+    return {
       action: 'git-sync',
       success: true,
       message: '无内容变更，已跳过 commit/push',
       output: clip(status.stdout),
-      startedAt,
+      startedAt: options.startedAt,
       finishedAt: new Date().toISOString(),
       actor: options.actor,
+      mode: 'local',
     }
-    lastRun = result
-    return result
   }
 
   if (!hasStaged) {
-    // 工作区有改动但未进暂存（路径外）——仅提示
-    const result: DeployRunResult = {
+    return {
       action: 'git-sync',
       success: true,
       message: `监控路径无暂存变更（${paths.join(', ')}）`,
       output: clip(status.stdout),
-      startedAt,
+      startedAt: options.startedAt,
       finishedAt: new Date().toISOString(),
       actor: options.actor,
+      mode: 'local',
     }
-    lastRun = result
-    return result
   }
 
   const msg =
@@ -242,29 +351,76 @@ export async function runGitSync(options: {
     `chore: publish content ${new Date().toISOString().slice(0, 10)}`
   const commit = await runCommand('git', ['commit', '-m', msg], 60_000)
   if (commit.code !== 0) {
-    const result: DeployRunResult = {
+    return {
       action: 'git-sync',
       success: false,
       message: 'git commit 失败',
       output: clip(commit.stderr || commit.stdout),
+      startedAt: options.startedAt,
+      finishedAt: new Date().toISOString(),
+      actor: options.actor,
+      mode: 'local',
+    }
+  }
+
+  const push = await runCommand('git', ['push', remote, branch], 120_000)
+  return {
+    action: 'git-sync',
+    success: push.code === 0,
+    message: push.code === 0 ? `已推送到 ${remote}/${branch}` : 'git push 失败',
+    output: clip([commit.stdout, push.stdout, push.stderr].filter(Boolean).join('\n')),
+    startedAt: options.startedAt,
+    finishedAt: new Date().toISOString(),
+    actor: options.actor,
+    mode: 'local',
+  }
+}
+
+/** git add → commit → push；Docker 无 .git 时走宿主机 Hook */
+export async function runGitSync(options: {
+  message?: string
+  actor?: string | null
+}): Promise<DeployRunResult> {
+  const startedAt = new Date().toISOString()
+  const cfg = await loadDeployConfig()
+  const status = await getDeployStatus()
+
+  if (status.gitSyncMode === 'none') {
+    const result: DeployRunResult = {
+      action: 'git-sync',
+      success: false,
+      message:
+        '无法推送：当前环境无 .git，且未配置 DEPLOY_HOOK_URL / GIT_SYNC_HOOK_URL',
       startedAt,
       finishedAt: new Date().toISOString(),
       actor: options.actor,
+      mode: 'none',
     }
     lastRun = result
     return result
   }
 
-  const push = await runCommand('git', ['push', remote, branch], 120_000)
-  const result: DeployRunResult = {
-    action: 'git-sync',
-    success: push.code === 0,
-    message: push.code === 0 ? `已推送到 ${remote}/${branch}` : 'git push 失败',
-    output: clip([commit.stdout, push.stdout, push.stderr].filter(Boolean).join('\n')),
-    startedAt,
-    finishedAt: new Date().toISOString(),
-    actor: options.actor,
+  if (status.gitSyncMode === 'hook') {
+    const hook = resolveGitSyncHookUrl(cfg)
+    const result = await callDeployHook({
+      url: hook,
+      token: cfg.DEPLOY_HOOK_TOKEN,
+      action: 'git-sync',
+      actor: options.actor,
+      message: options.message,
+      startedAt,
+      timeoutMs: 180_000,
+    })
+    lastRun = result
+    return result
   }
+
+  const result = await runGitSyncLocal({
+    message: options.message,
+    actor: options.actor,
+    startedAt,
+    cfg,
+  })
   lastRun = result
   return result
 }
@@ -278,47 +434,19 @@ export async function runDeployVps(options: {
   const hook = cfg.DEPLOY_HOOK_URL?.trim()
 
   if (hook) {
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      }
-      if (cfg.DEPLOY_HOOK_TOKEN) {
-        headers.Authorization = `Bearer ${cfg.DEPLOY_HOOK_TOKEN}`
-      }
-      const res = await fetch(hook, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          action: 'deploy-vps',
-          actor: options.actor ?? null,
-          at: startedAt,
-        }),
-      })
-      const text = await res.text()
-      const result: DeployRunResult = {
-        action: 'deploy-vps',
-        success: res.ok,
-        message: res.ok ? '已触发 DEPLOY_HOOK_URL' : `Hook 返回 ${res.status}`,
-        output: clip(text),
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        actor: options.actor,
-      }
-      lastRun = result
-      return result
-    } catch (err) {
-      const result: DeployRunResult = {
-        action: 'deploy-vps',
-        success: false,
-        message: '调用 DEPLOY_HOOK_URL 失败',
-        output: clip(String(err)),
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        actor: options.actor,
-      }
-      lastRun = result
-      return result
+    const result = await callDeployHook({
+      url: hook,
+      token: cfg.DEPLOY_HOOK_TOKEN,
+      action: 'deploy-vps',
+      actor: options.actor,
+      startedAt,
+      timeoutMs: 900_000,
+    })
+    if (result.success && result.message.startsWith('已触发 Hook')) {
+      result.message = '已触发 DEPLOY_HOOK_URL'
     }
+    lastRun = result
+    return result
   }
 
   if (!cfg.VPS_HOST?.trim() || !cfg.VPS_PASSWORD?.trim()) {
@@ -329,6 +457,7 @@ export async function runDeployVps(options: {
       startedAt,
       finishedAt: new Date().toISOString(),
       actor: options.actor,
+      mode: 'script',
     }
     lastRun = result
     return result
@@ -345,6 +474,7 @@ export async function runDeployVps(options: {
     startedAt,
     finishedAt: new Date().toISOString(),
     actor: options.actor,
+    mode: 'script',
   }
   lastRun = result
   return result

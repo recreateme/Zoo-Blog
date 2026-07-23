@@ -27,6 +27,9 @@ export default function AdminUploadPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
+  const [editUrl, setEditUrl] = useState('')
+  const [pushing, setPushing] = useState(false)
+  const [pushMsg, setPushMsg] = useState('')
 
   useEffect(() => {
     fetch('/api/posts?seriesOptions=1')
@@ -119,11 +122,35 @@ export default function AdminUploadPage() {
         return
       }
       setOk(`已写入 ${data.post.filePath}`)
-      setTimeout(() => router.push(data.editUrl || `/admin/editor/${data.post.id}`), 600)
+      setEditUrl(data.editUrl || `/admin/editor/${data.post.id}`)
+      setPushMsg('')
     } catch {
       setError('网络错误')
     } finally {
       setBusy(false)
+    }
+  }
+
+  const handlePushGithub = async () => {
+    if (!window.confirm('将 content/ 与 public/images/ 推送到 GitHub。继续？')) return
+    setPushing(true)
+    setPushMsg('')
+    try {
+      const res = await fetch('/api/admin/git-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.success) {
+        setPushMsg(data.result?.message ?? data.error ?? '推送失败')
+        return
+      }
+      setPushMsg(data.result?.message ?? '已推送到 GitHub')
+    } catch {
+      setPushMsg('推送请求失败')
+    } finally {
+      setPushing(false)
     }
   }
 
@@ -322,9 +349,52 @@ export default function AdminUploadPage() {
         </label>
 
         {error && <p className="text-sm" style={{ color: 'var(--danger, #c44)' }}>{error}</p>}
-        {ok && <p className="text-sm" style={{ color: 'var(--accent)' }}>{ok}</p>}
+        {ok && (
+          <div className="space-y-3 rounded border border-[var(--border)] p-3">
+            <p className="text-sm" style={{ color: 'var(--accent)' }}>{ok}</p>
+            <p className="text-xs text-meta">
+              站点已可访问；若要同步到 GitHub 仓库，请点下方推送（或稍后在「设置 → 发布」）。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-primary text-sm"
+                disabled={pushing}
+                onClick={handlePushGithub}
+              >
+                {pushing ? '推送中…' : '推送到 GitHub'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={() => router.push(editUrl || '/admin/posts')}
+              >
+                去编辑
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost text-sm"
+                onClick={() => router.push('/admin/settings#publish')}
+              >
+                打开设置
+              </button>
+            </div>
+            {pushMsg && (
+              <p
+                className="text-xs"
+                style={{
+                  color: pushMsg.includes('失败') || pushMsg.includes('无法')
+                    ? 'var(--danger, #c44)'
+                    : 'var(--accent)',
+                }}
+              >
+                {pushMsg}
+              </p>
+            )}
+          </div>
+        )}
 
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <button type="submit" className="btn btn-primary" disabled={busy || !!ok}>
           <Upload size={16} />
           {busy ? '导入中…' : '写入 content/ 并入库'}
         </button>

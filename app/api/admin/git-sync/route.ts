@@ -37,7 +37,11 @@ export async function POST(req: NextRequest) {
     const status = await getDeployStatus()
     if (!status.gitReady) {
       return NextResponse.json(
-        { error: '当前环境不是 git 仓库，无法推送', status },
+        {
+          error:
+            '无法推送到 GitHub：当前无 .git，且未配置 DEPLOY_HOOK_URL / GIT_SYNC_HOOK_URL。Docker 请在宿主机运行 scripts/admin-hook-server.py 并写入 Hook 地址。',
+          status,
+        },
         { status: 400 }
       )
     }

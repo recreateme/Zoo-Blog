@@ -250,8 +250,9 @@ status: published
 
 ### 发布（设置页）
 
-- `POST /api/admin/git-sync` → `git add content public/images` → commit → push  
+- `POST /api/admin/git-sync` → 本地有 `.git` 则 `git add/commit/push`；否则调用宿主机 `DEPLOY_HOOK_URL` / `GIT_SYNC_HOOK_URL`（`scripts/admin-hook-server.py`）
 - `POST /api/admin/deploy-vps` → `DEPLOY_HOOK_URL` 或 `scripts/deploy-vps.py`
+- 上传成功后可在上传页一键推送；监控路径默认 `content` + `public/images`
 
 ### 登录
 
