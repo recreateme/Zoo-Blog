@@ -81,6 +81,13 @@ export async function GET(req: NextRequest) {
         series: true, seriesOrder: true, wordCount: true,
         tags: true, status: true, readingTime: true, viewCount: true,
         createdAt: true, updatedAt: true, publishedAt: true, filePath: true,
+        seriesLinks: {
+          orderBy: { order: 'asc' },
+          select: {
+            order: true,
+            series: { select: { id: true, name: true } },
+          },
+        },
       },
     }),
     prisma.post.count({ where }),
@@ -88,7 +95,16 @@ export async function GET(req: NextRequest) {
 
   type PostRow = typeof posts[0]
   return NextResponse.json({
-    posts: posts.map((p: PostRow) => ({ ...p, tags: parseTags(p.tags as string) })),
+    posts: posts.map((p: PostRow) => ({
+      ...p,
+      tags: parseTags(p.tags as string),
+      seriesList: p.seriesLinks.map((l) => ({
+        id: l.series.id,
+        name: l.series.name,
+        order: l.order,
+      })),
+      series: p.seriesLinks[0]?.series.name ?? p.series,
+    })),
     total,
     page,
     pageSize,

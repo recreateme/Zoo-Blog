@@ -24,6 +24,7 @@ import {
 import { PAGE_REVALIDATE } from '@/lib/cache-tags'
 import { recordView } from '@/lib/view-count'
 import { preprocessWikiLinksInMarkdown } from '@/lib/wiki-links'
+import { decodeRouteParam } from '@/lib/route-params'
 import Badge from '@/components/ui/Badge'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
 import TableOfContents from '@/components/post/TableOfContents'
@@ -43,7 +44,7 @@ interface PostPageProps {
 }
 
 async function getPost(slug: string) {
-  return getPublishedPostCached(slug)
+  return getPublishedPostCached(decodeRouteParam(slug))
 }
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {

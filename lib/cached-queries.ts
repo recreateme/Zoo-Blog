@@ -2,6 +2,7 @@ import { unstable_cache } from 'next/cache'
 import prisma from '@/lib/db'
 import { parseTags } from '@/lib/utils'
 import { CACHE_TAG, PAGE_REVALIDATE } from '@/lib/cache-tags'
+import { decodeRouteParam, routeParamCandidates } from '@/lib/route-params'
 import {
   getPostAdjacencyBySeriesId,
   getSeriesPosts,
@@ -260,24 +261,29 @@ export type PublishedPostWithSeries = Post & {
 export async function getPublishedPostCached(
   slug: string
 ): Promise<PublishedPostWithSeries | null> {
+  const normalized = decodeRouteParam(slug)
   const post = await unstable_cache(
     async () => {
-      return prisma.post.findUnique({
-        where: { id: slug, status: 'PUBLISHED' },
-        include: {
-          seriesLinks: {
-            orderBy: { order: 'asc' },
-            select: {
-              order: true,
-              series: { select: { id: true, name: true } },
+      for (const id of routeParamCandidates(normalized)) {
+        const found = await prisma.post.findFirst({
+          where: { id, status: 'PUBLISHED' },
+          include: {
+            seriesLinks: {
+              orderBy: { order: 'asc' },
+              select: {
+                order: true,
+                series: { select: { id: true, name: true } },
+              },
             },
           },
-        },
-      })
+        })
+        if (found) return found
+      }
+      return null
     },
-    [`published-post-${slug}-v2`],
+    [`published-post-${normalized}-v3`],
     {
-      tags: [CACHE_TAG.posts, CACHE_TAG.post(slug)],
+      tags: [CACHE_TAG.posts, CACHE_TAG.post(normalized)],
       revalidate: PAGE_REVALIDATE.post,
     }
   )()

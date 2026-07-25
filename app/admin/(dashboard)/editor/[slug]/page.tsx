@@ -14,7 +14,15 @@ import EditorOutlineFields from '@/components/editor/EditorOutlineFields'
 
 export default function EditEditorPage() {
   const params = useParams()
-  const slug = params.slug as string
+  const rawSlug = String(params.slug ?? '')
+  const slug = (() => {
+    try {
+      return decodeURIComponent(rawSlug)
+    } catch {
+      return rawSlug
+    }
+  })()
+  const slugPath = encodeURIComponent(slug)
 
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -37,7 +45,7 @@ export default function EditEditorPage() {
 
   // 加载已有文章
   useEffect(() => {
-    fetch(`/api/posts/${slug}`)
+    fetch(`/api/posts/${slugPath}`)
       .then((r) => r.json())
       .then((data) => {
         const p = data.post
@@ -74,7 +82,7 @@ export default function EditEditorPage() {
         setLoading(false)
       })
       .catch(() => { setError('加载文章失败'); setLoading(false) })
-  }, [slug])
+  }, [slugPath])
 
   useEffect(() => {
     fetch('/api/posts?seriesOptions=1')
@@ -141,7 +149,7 @@ export default function EditEditorPage() {
     }
     setSaving(true)
     setError('')
-    const res = await fetch(`/api/posts/${slug}`, {
+    const res = await fetch(`/api/posts/${slugPath}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -219,7 +227,7 @@ export default function EditEditorPage() {
         </Link>
 
         <a
-          href={`/api/posts/${slug}/export`}
+          href={`/api/posts/${slugPath}/export`}
           className="btn btn-ghost p-2"
           title="下载完整 zip（含图片）"
         >

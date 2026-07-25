@@ -16,6 +16,7 @@ import {
 } from '@/lib/series-ops'
 import { revalidatePublishedContent } from '@/lib/revalidate-content'
 import { syncPostLinksForContent, buildWikiSlugMap, removePostLinksForIds } from '@/lib/wiki-links'
+import { decodeRouteParam } from '@/lib/route-params'
 import { z } from 'zod'
 
 const SeriesMemberSchema = z.object({
@@ -44,8 +45,9 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: '未授权' }, { status: 401 })
 
+  const id = decodeRouteParam(params.slug)
   const post = await prisma.post.findUnique({
-    where: { id: params.slug },
+    where: { id },
     include: {
       seriesLinks: {
         orderBy: { order: 'asc' },
@@ -74,8 +76,9 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
   try {
     const body = await req.json()
     const data = UpdatePostSchema.parse(body)
+    const id = decodeRouteParam(params.slug)
 
-    const existing = await prisma.post.findUnique({ where: { id: params.slug } })
+    const existing = await prisma.post.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: '文章不存在' }, { status: 404 })
 
     const contentForStats = data.content ?? existing.content
@@ -119,7 +122,7 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
     }
 
     const updated = await prisma.post.update({
-      where: { id: params.slug },
+      where: { id },
       data: {
         ...(data.title && { title: data.title }),
         ...(data.content !== undefined && { content: data.content }),
@@ -223,9 +226,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { slug: str
   if (!session) return NextResponse.json({ error: '未授权' }, { status: 401 })
 
   const deleteFile = req.nextUrl.searchParams.get('deleteFile') === '1'
+  const id = decodeRouteParam(params.slug)
 
   try {
-    const existing = await prisma.post.findUnique({ where: { id: params.slug } })
+    const existing = await prisma.post.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: '文章不存在' }, { status: 404 })
 
     let fileDeleted = false
@@ -233,23 +237,23 @@ export async function DELETE(req: NextRequest, { params }: { params: { slug: str
       fileDeleted = await deleteBoundMarkdownFile(existing.filePath)
     }
 
-    await prisma.post.delete({ where: { id: params.slug } })
+    await prisma.post.delete({ where: { id } })
     try {
-      await removePostFromIndex(params.slug)
+      await removePostFromIndex(id)
     } catch (err) {
-      console.warn(`搜索索引删除失败 (${params.slug}):`, err)
+      console.warn(`搜索索引删除失败 (${id}):`, err)
     }
 
     try {
-      await removePostVectors(params.slug)
+      await removePostVectors(id)
     } catch (err) {
-      console.warn(`向量索引删除失败 (${params.slug}):`, err)
+      console.warn(`向量索引删除失败 (${id}):`, err)
     }
 
     if (existing.status === 'PUBLISHED') {
-      revalidatePublishedContent({ removedIds: [params.slug] })
+      revalidatePublishedContent({ removedIds: [id] })
     }
-    await removePostLinksForIds([params.slug])
+    await removePostLinksForIds([id])
 
     return NextResponse.json({
       success: true,

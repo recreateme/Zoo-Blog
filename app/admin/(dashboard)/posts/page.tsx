@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { PenSquare, Trash2, Eye, Search, Plus, Loader2, Download } from 'lucide-react'
-import { CATEGORIES } from '@/lib/categories'
 import { formatDateShort } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
@@ -17,7 +16,6 @@ export default function PostsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
   const [page, setPage] = useState(1)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -25,7 +23,6 @@ export default function PostsPage() {
     setLoading(true)
     const params = new URLSearchParams({ page: page.toString(), pageSize: '15' })
     if (statusFilter) params.set('status', statusFilter)
-    if (categoryFilter) params.set('category', categoryFilter)
     if (search.trim()) params.set('q', search.trim())
 
     const res = await fetch(`/api/posts?${params}`)
@@ -33,7 +30,7 @@ export default function PostsPage() {
     setPosts(data.posts ?? [])
     setTotal(data.total ?? 0)
     setLoading(false)
-  }, [page, statusFilter, categoryFilter, search])
+  }, [page, statusFilter, search])
 
   useEffect(() => {
     const timer = setTimeout(() => fetchPosts(), search ? 300 : 0)
@@ -54,10 +51,19 @@ export default function PostsPage() {
     }
 
     setDeleting(post.id)
-    const url = deleteFile ? `/api/posts/${post.id}?deleteFile=1` : `/api/posts/${post.id}`
+    const url = deleteFile
+      ? `/api/posts/${encodeURIComponent(post.id)}?deleteFile=1`
+      : `/api/posts/${encodeURIComponent(post.id)}`
     await fetch(url, { method: 'DELETE' })
     setDeleting(null)
     fetchPosts()
+  }
+
+  const seriesLabel = (post: AdminPostRow) => {
+    if (post.seriesList?.length) {
+      return post.seriesList.map((s) => s.name).join(' · ')
+    }
+    return post.series?.trim() || '—'
   }
 
   return (
@@ -78,14 +84,13 @@ export default function PostsPage() {
         <div className="relative flex-1 min-w-40">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
           <input
-            type="text"
+            type="search"
+            placeholder="搜索标题 / slug…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            placeholder="搜索标题或 slug…"
-            className="input pl-8 py-1.5 text-sm"
+            className="input py-1.5 text-sm w-full pl-8"
           />
         </div>
-
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
@@ -94,17 +99,6 @@ export default function PostsPage() {
           <option value="">全部状态</option>
           <option value="PUBLISHED">已发布</option>
           <option value="DRAFT">草稿</option>
-        </select>
-
-        <select
-          value={categoryFilter}
-          onChange={(e) => { setCategoryFilter(e.target.value); setPage(1) }}
-          className="input py-1.5 text-sm w-auto"
-        >
-          <option value="">全部分类</option>
-          {CATEGORIES.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-          ))}
         </select>
       </div>
 
@@ -125,7 +119,7 @@ export default function PostsPage() {
           <table className="w-full">
             <thead>
               <tr className="admin-table-head">
-                {['标题', '来源', '分类', '专题', '状态', '更新时间', '操作'].map((h) => (
+                {['标题', '来源', '专题', '状态', '更新时间', '操作'].map((h) => (
                   <th key={h} className="admin-table-th">
                     {h}
                   </th>
@@ -154,13 +148,8 @@ export default function PostsPage() {
                       {post.filePath ? '文件' : '后台'}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="category" categoryId={post.category}>
-                      {CATEGORIES.find((c) => c.id === post.category)?.name ?? post.category}
-                    </Badge>
-                  </td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    {post.series?.trim() ? post.series : '—'}
+                    {seriesLabel(post)}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="status">{post.status}</Badge>
@@ -177,7 +166,7 @@ export default function PostsPage() {
                         <PenSquare size={14} />
                       </Link>
                       <a
-                        href={`/api/posts/${post.id}/export`}
+                        href={`/api/posts/${encodeURIComponent(post.id)}/export`}
                         className="btn btn-ghost p-1.5"
                         title="下载 zip"
                       >
@@ -207,13 +196,17 @@ export default function PostsPage() {
             第 {page} 页，共 {Math.ceil(total / 15)} 页
           </span>
           <div className="flex gap-2">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary text-sm">
+            <button
+              className="btn btn-secondary text-sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
               上一页
             </button>
             <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= Math.ceil(total / 15)}
               className="btn btn-secondary text-sm"
+              disabled={page >= Math.ceil(total / 15)}
+              onClick={() => setPage((p) => p + 1)}
             >
               下一页
             </button>

@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import type { PostMeta } from '@/types'
 import { parseTags } from '@/lib/utils'
+import { routeParamCandidates } from '@/lib/route-params'
 
 export interface SeriesListItem {
   id: string
@@ -99,15 +100,7 @@ export async function listSeriesWithCounts(): Promise<SeriesListItem[]> {
 }
 
 export async function getSeriesBySlug(slug: string) {
-  const candidates: string[] = []
-  const raw = slug?.trim() ?? ''
-  if (raw) candidates.push(raw)
-  try {
-    const decoded = decodeURIComponent(raw)
-    if (decoded && decoded !== raw) candidates.push(decoded)
-  } catch {
-    // 非法 % 序列时保留原值
-  }
+  const candidates = routeParamCandidates(slug)
 
   for (const id of candidates) {
     const byId = await prisma.series.findUnique({ where: { id } })

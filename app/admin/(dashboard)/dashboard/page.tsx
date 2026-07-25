@@ -1,7 +1,6 @@
 import { Metadata } from 'next'
 import { FileText, Send, FileEdit, Eye, Paperclip } from 'lucide-react'
 import prisma from '@/lib/db'
-import { CATEGORIES } from '@/lib/categories'
 import { formatDate, parseTags } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
 import Link from 'next/link'
@@ -10,7 +9,7 @@ import { getSiteName } from '@/lib/site'
 export const metadata: Metadata = { title: '仪表盘 · 管理后台' }
 
 async function getStats() {
-  const [totalPosts, publishedPosts, draftPosts, totalAttachments, recentPosts, categoryStats] =
+  const [totalPosts, publishedPosts, draftPosts, totalAttachments, recentPosts, seriesRows] =
     await Promise.all([
       prisma.post.count(),
       prisma.post.count({ where: { status: 'PUBLISHED' } }),
@@ -20,20 +19,33 @@ async function getStats() {
         orderBy: { updatedAt: 'desc' },
         take: 8,
         select: {
-          id: true, title: true, status: true, category: true,
+          id: true, title: true, status: true,
           tags: true, updatedAt: true, publishedAt: true,
           readingTime: true, viewCount: true, createdAt: true,
           subcategory: true, summary: true,
         },
       }),
-      prisma.post.groupBy({
-        by: ['category'],
-        _count: { id: true },
-        where: { status: 'PUBLISHED' },
+      prisma.series.findMany({
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          _count: {
+            select: {
+              posts: {
+                where: { post: { status: 'PUBLISHED' } },
+              },
+            },
+          },
+        },
       }),
     ])
 
   const totalViews = await prisma.post.aggregate({ _sum: { viewCount: true } })
+  const seriesStats = seriesRows
+    .map((s) => ({ id: s.id, name: s.name, count: s._count.posts }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'))
 
   return {
     totalPosts,
@@ -41,12 +53,12 @@ async function getStats() {
     draftPosts,
     totalAttachments,
     totalViews: totalViews._sum.viewCount ?? 0,
-    recentPosts: recentPosts.map((p: typeof recentPosts[0]) => ({
+    recentPosts: recentPosts.map((p: (typeof recentPosts)[0]) => ({
       ...p,
       tags: parseTags(p.tags as string),
       status: p.status as 'DRAFT' | 'PUBLISHED',
     })),
-    categoryStats,
+    seriesStats,
   }
 }
 
@@ -92,7 +104,7 @@ export default async function DashboardPage() {
             {stats.recentPosts.map((post) => (
               <Link
                 key={post.id}
-                href={`/admin/editor/${post.id}`}
+                href={`/admin/editor/${encodeURIComponent(post.id)}`}
                 className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-surface)] transition-colors group"
               >
                 <div className="flex-1 min-w-0">
@@ -109,23 +121,26 @@ export default async function DashboardPage() {
 
         <div className="admin-panel">
           <h2 className="text-sm font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
-            分类分布
+            专题分布
           </h2>
           <div className="space-y-2.5">
-            {stats.categoryStats
-              .sort((a: { category: string; _count: { id: number } }, b: { category: string; _count: { id: number } }) => b._count.id - a._count.id)
-              .map((s: { category: string; _count: { id: number } }) => {
-                const cat = CATEGORIES.find((c) => c.id === s.category)
+            {stats.seriesStats.length === 0 ? (
+              <p className="text-xs text-meta">暂无专题归属的已发布笔记</p>
+            ) : (
+              stats.seriesStats.map((s) => {
                 const pct = stats.publishedPosts > 0
-                  ? Math.round((s._count.id / stats.publishedPosts) * 100)
+                  ? Math.round((s.count / stats.publishedPosts) * 100)
                   : 0
                 return (
-                  <div key={s.category}>
+                  <div key={s.id}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs flex items-center gap-1.5 text-lead">
-                        {cat?.icon} {cat?.name ?? s.category}
-                      </span>
-                      <span className="text-xs tabular-nums text-meta">{s._count.id} 篇</span>
+                      <Link
+                        href={`/series/${encodeURIComponent(s.id)}`}
+                        className="text-xs text-lead hover:text-[var(--accent)] transition-colors"
+                      >
+                        {s.name}
+                      </Link>
+                      <span className="text-xs tabular-nums text-meta">{s.count} 篇</span>
                     </div>
                     <div className="h-1.5 rounded-full" style={{ background: 'var(--bg-surface)' }}>
                       <div
@@ -135,7 +150,8 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                 )
-              })}
+              })
+            )}
           </div>
 
           <Link href="/admin/editor" className="btn btn-primary w-full justify-center mt-6 text-sm">
