@@ -110,26 +110,43 @@ echo $? > {EXITFILE}
             client.get_transport().send_ignore()
         except Exception:
             pass
+        # 仅当构建 PID 已退出时才视为结束；禁止仅凭陈旧 EXITFILE 误判成功
         _, alive = sh(
             client,
-            f"if [ -f {EXITFILE} ]; then echo DONE; "
-            f"elif kill -0 $(cat {PIDFILE}) 2>/dev/null; then echo RUNNING; "
+            f"if [ -f {PIDFILE} ] && kill -0 $(cat {PIDFILE}) 2>/dev/null; then echo RUNNING; "
+            f"elif pgrep -af 'docker compose .*up -d --build' | grep -v pgrep >/dev/null; then echo RUNNING; "
             f"else echo DONE; fi",
         )
         sh(client, f"tail -n 6 {LOG} 2>/dev/null || echo '(log empty)'")
         if "DONE" in alive:
             _, exit_code = sh(client, f"cat {EXITFILE} 2>/dev/null || echo 1")
+            _, created = sh(
+                client,
+                "docker inspect -f '{{.Created}}' knowledge-blog-app 2>/dev/null || echo none",
+            )
             _, running = sh(
                 client,
                 "docker inspect -f '{{.State.Running}}' knowledge-blog-app 2>/dev/null || echo false",
             )
-            sh(client, f"tail -n 40 {LOG} || true")
+            _, log_tail = sh(client, f"tail -n 60 {LOG} || true")
+            # 成功信号：exit 0，且日志出现容器启动/重建，或镜像导出完成
+            log_ok = any(
+                marker in log_tail
+                for marker in (
+                    "Started",
+                    "Recreated",
+                    "exporting to image",
+                    "Built",
+                )
+            )
             client.close()
-            ok = exit_code.strip() == "0" or "true" in running
-            if ok and "true" in running:
+            ok = exit_code.strip() == "0" and "true" in running and log_ok
+            if ok:
                 print("[deploy] 构建完成，app 容器运行中")
+                print("[deploy] created:", created.strip())
                 return 0
             print("[deploy] 构建结束但未成功", file=sys.stderr)
+            print("[deploy] exit=", exit_code.strip(), "running=", running.strip(), "log_ok=", log_ok)
             return 1
 
     print("[deploy] 等待超时", file=sys.stderr)
