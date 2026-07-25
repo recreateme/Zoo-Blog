@@ -7,6 +7,7 @@ import { buildPostExportZip } from '@/lib/post-export-zip'
 import { stringifyMarkdownFile } from '@/lib/content-write'
 import { parseTags } from '@/lib/utils'
 import { parseSeriesMemberships } from '@/lib/series-ops'
+import { decodeRouteParam } from '@/lib/route-params'
 import fs from 'fs/promises'
 
 export async function GET(
@@ -16,8 +17,9 @@ export async function GET(
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: '未授权' }, { status: 401 })
 
+  const id = decodeRouteParam(params.slug)
   const post = await prisma.post.findUnique({
-    where: { id: params.slug },
+    where: { id },
     include: {
       seriesLinks: {
         select: { order: true, series: { select: { name: true } } },
