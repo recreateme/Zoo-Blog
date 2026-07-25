@@ -397,6 +397,10 @@ curl -s http://127.0.0.1:9090/health
 
 也可在宿主机直接：`python3 scripts/git_sync.py -m "chore: publish content"`。
 
+若后台提示 `git commit 失败` / `Author identity unknown`：宿主机未配置 git 作者。`git_sync.py` 会自动写入仓库级 `user.name` / `user.email`（可用 `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` 覆盖）。
+
+若提示 `git push` rejected / fetch first：多半是 GitHub 上已有更新的代码提交。新版 `git_sync` 会自动 `pull --rebase` 后再推；仍失败时到宿主机仓库手动处理冲突。
+
 ### 搜索无结果 / 体验差
 
 ```bash

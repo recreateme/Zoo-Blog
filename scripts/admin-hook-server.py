@@ -10,6 +10,7 @@ DEPLOY_HOOK_URL 指到本服务（建议仅监听本机或 Docker 网桥）。
 
 可选环境变量：
   ADMIN_HOOK_HOST=0.0.0.0
+  # 生产请配合防火墙：仅放行 127.0.0.1 与 Docker 网桥访问 9090，勿对公网开放
   ADMIN_HOOK_PORT=9090
   REPO_DIR / VPS_REPO_DIR  仓库路径（默认本脚本上级）
   COMPOSE_ARGS             默认 --profile rag
@@ -78,6 +79,7 @@ def handle_git_sync(file_cfg: dict[str, str], body: dict) -> dict:
         remote=remote,
         branch=branch,
         paths=paths,
+        file_cfg=file_cfg,
     )
     actor = body.get("actor")
     if actor:

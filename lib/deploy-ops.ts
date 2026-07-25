@@ -87,6 +87,8 @@ export async function loadDeployConfig(): Promise<Record<string, string>> {
     'GIT_SYNC_PATHS',
     'GIT_REMOTE',
     'GIT_BRANCH',
+    'GIT_AUTHOR_NAME',
+    'GIT_AUTHOR_EMAIL',
   ]
 
   const out = { ...fromFile }
@@ -351,16 +353,36 @@ async function runGitSyncLocal(options: {
     }
   }
 
+  const authorName = options.cfg.GIT_AUTHOR_NAME?.trim() || 'knowledge-blog-bot'
+  const authorEmail =
+    options.cfg.GIT_AUTHOR_EMAIL?.trim() || 'blog-bot@users.noreply.github.com'
   const msg =
     options.message?.trim() ||
     `chore: publish content ${new Date().toISOString().slice(0, 10)}`
-  const commit = await runCommand('git', ['commit', '-m', msg], 60_000)
+  const commit = await runCommand(
+    'git',
+    [
+      '-c',
+      `user.name=${authorName}`,
+      '-c',
+      `user.email=${authorEmail}`,
+      'commit',
+      '-m',
+      msg,
+    ],
+    60_000
+  )
   if (commit.code !== 0) {
+    const detail = commit.stderr || commit.stdout
+    const identityHint =
+      /Author identity unknown|user\.email/i.test(detail)
+        ? '（可设置 GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL）'
+        : ''
     return {
       action: 'git-sync',
       success: false,
-      message: 'git commit 失败',
-      output: clip(commit.stderr || commit.stdout),
+      message: `git commit 失败${identityHint}`,
+      output: clip(detail),
       startedAt: options.startedAt,
       finishedAt: new Date().toISOString(),
       actor: options.actor,
