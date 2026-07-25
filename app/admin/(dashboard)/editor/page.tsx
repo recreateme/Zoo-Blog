@@ -127,7 +127,7 @@ export default function NewEditorPage() {
         id: slug,
         title,
         content,
-        category: 'others',
+        category: '',
         subcategory: subcategory || undefined,
         seriesMemberships: memberships,
         coverImage: coverImage.trim() || null,

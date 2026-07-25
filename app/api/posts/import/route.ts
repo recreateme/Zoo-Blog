@@ -92,14 +92,18 @@ export async function POST(req: NextRequest) {
     const parsed = extractPostMeta(text, file.name)
     const { content: body } = parseFrontmatter(text)
 
-    // 净化 slug：文件名可能含 + 空格等字符，统一替换为 -，保证 URL 与文件名一致
+    // 净化 slug：统一 ASCII，避免中文 slug 在 Next 动态路由中因百分号编码 404
+    const { slugifyPostId, isAsciiSlug } = await import('@/lib/post-slug')
     const rawSlug = (meta.slug?.trim() || parsed.id).replace(/^\/+|\/+$/g, '')
-    const slug = rawSlug
+    let slug = rawSlug
       .replace(/[^a-zA-Z0-9_\u4e00-\u9fff.-]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
     if (!slug) {
       return NextResponse.json({ error: 'Slug 无效，请手动填写' }, { status: 400 })
+    }
+    if (!isAsciiSlug(slug)) {
+      slug = slugifyPostId(meta.title?.trim() || parsed.title || slug)
     }
     const title = meta.title?.trim() || parsed.title
     const tags = ensureTags(meta.tags?.length ? meta.tags : parsed.tags)
@@ -175,7 +179,7 @@ export async function POST(req: NextRequest) {
         id: slug,
         title,
         content: body,
-        category: parsed.category || 'others',
+        category: '',
         subcategory,
         series: primary?.name ?? null,
         seriesOrder: primary?.order ?? null,

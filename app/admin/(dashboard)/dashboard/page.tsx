@@ -9,7 +9,7 @@ import { getSiteName } from '@/lib/site'
 export const metadata: Metadata = { title: '仪表盘 · 管理后台' }
 
 async function getStats() {
-  const [totalPosts, publishedPosts, draftPosts, totalAttachments, recentPosts, seriesRows] =
+  const [totalPosts, publishedPosts, draftPosts, totalAttachments, recentPosts, seriesStats] =
     await Promise.all([
       prisma.post.count(),
       prisma.post.count({ where: { status: 'PUBLISHED' } }),
@@ -23,29 +23,29 @@ async function getStats() {
           tags: true, updatedAt: true, publishedAt: true,
           readingTime: true, viewCount: true, createdAt: true,
           subcategory: true, summary: true,
-        },
-      }),
-      prisma.series.findMany({
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          _count: {
-            select: {
-              posts: {
-                where: { post: { status: 'PUBLISHED' } },
-              },
-            },
+          seriesLinks: {
+            take: 2,
+            select: { series: { select: { name: true } } },
           },
         },
       }),
+      prisma.postSeries.groupBy({
+        by: ['seriesId'],
+        _count: { postId: true },
+        where: { post: { status: 'PUBLISHED' } },
+      }),
     ])
 
+  const seriesIds = seriesStats.map((s) => s.seriesId)
+  const seriesRows = seriesIds.length
+    ? await prisma.series.findMany({
+        where: { id: { in: seriesIds } },
+        select: { id: true, name: true },
+      })
+    : []
+  const seriesName = new Map(seriesRows.map((s) => [s.id, s.name]))
+
   const totalViews = await prisma.post.aggregate({ _sum: { viewCount: true } })
-  const seriesStats = seriesRows
-    .map((s) => ({ id: s.id, name: s.name, count: s._count.posts }))
-    .filter((s) => s.count > 0)
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'))
 
   return {
     totalPosts,
@@ -53,12 +53,19 @@ async function getStats() {
     draftPosts,
     totalAttachments,
     totalViews: totalViews._sum.viewCount ?? 0,
-    recentPosts: recentPosts.map((p: (typeof recentPosts)[0]) => ({
+    recentPosts: recentPosts.map((p) => ({
       ...p,
       tags: parseTags(p.tags as string),
       status: p.status as 'DRAFT' | 'PUBLISHED',
+      seriesNames: p.seriesLinks.map((l) => l.series.name),
     })),
-    seriesStats,
+    seriesStats: seriesStats
+      .map((s) => ({
+        id: s.seriesId,
+        name: seriesName.get(s.seriesId) ?? s.seriesId,
+        count: s._count.postId,
+      }))
+      .sort((a, b) => b.count - a.count),
   }
 }
 
@@ -104,14 +111,17 @@ export default async function DashboardPage() {
             {stats.recentPosts.map((post) => (
               <Link
                 key={post.id}
-                href={`/admin/editor/${encodeURIComponent(post.id)}`}
+                href={`/admin/editor/${post.id}`}
                 className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-surface)] transition-colors group"
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate group-hover:text-[var(--accent)] transition-colors" style={{ color: 'var(--text-primary)' }}>
                     {post.title}
                   </p>
-                  <p className="text-xs text-meta mt-0.5">{formatDate(post.updatedAt)}</p>
+                  <p className="text-xs text-meta mt-0.5">
+                    {formatDate(post.updatedAt)}
+                    {post.seriesNames.length > 0 ? ` · ${post.seriesNames.join(' / ')}` : ''}
+                  </p>
                 </div>
                 <Badge variant="status">{post.status}</Badge>
               </Link>
@@ -125,7 +135,7 @@ export default async function DashboardPage() {
           </h2>
           <div className="space-y-2.5">
             {stats.seriesStats.length === 0 ? (
-              <p className="text-xs text-meta">暂无专题归属的已发布笔记</p>
+              <p className="text-xs text-meta">暂无专题归属</p>
             ) : (
               stats.seriesStats.map((s) => {
                 const pct = stats.publishedPosts > 0
@@ -134,13 +144,8 @@ export default async function DashboardPage() {
                 return (
                   <div key={s.id}>
                     <div className="flex items-center justify-between mb-1">
-                      <Link
-                        href={`/series/${encodeURIComponent(s.id)}`}
-                        className="text-xs text-lead hover:text-[var(--accent)] transition-colors"
-                      >
-                        {s.name}
-                      </Link>
-                      <span className="text-xs tabular-nums text-meta">{s.count} 篇</span>
+                      <span className="text-xs text-lead truncate pr-2">{s.name}</span>
+                      <span className="text-xs tabular-nums text-meta shrink-0">{s.count} 篇</span>
                     </div>
                     <div className="h-1.5 rounded-full" style={{ background: 'var(--bg-surface)' }}>
                       <div

@@ -12,6 +12,7 @@ import { acquireSyncLock, SyncLockError } from '@/lib/sync-lock'
 import { revalidatePublishedContent } from '@/lib/revalidate-content'
 import { applyRateLimit } from '@/lib/rate-limit'
 import { isAdminSession } from '@/lib/rbac'
+import { migrateNonAsciiPostIds } from '@/lib/post-ops'
 
 function rateLimitResponse(retryAfterSec?: number) {
   return NextResponse.json(
@@ -45,6 +46,16 @@ export async function POST(req: NextRequest) {
     const lock = await acquireSyncLock()
     try {
       const result = await runContentSync()
+      const postIdMigration = await migrateNonAsciiPostIds()
+      if (postIdMigration.renamed > 0) {
+        console.info(
+          `[sync] migrated non-ascii post ids: ${postIdMigration.mapping
+            .map((m) => `${m.from}→${m.to}`)
+            .join(', ')}`
+        )
+        result.changedIds.push(...postIdMigration.mapping.map((m) => m.to))
+        result.removedIds.push(...postIdMigration.mapping.map((m) => m.from))
+      }
 
       let reindexed = 0
       let indexRemoved = 0

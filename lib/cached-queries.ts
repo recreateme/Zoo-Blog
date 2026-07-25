@@ -2,7 +2,6 @@ import { unstable_cache } from 'next/cache'
 import prisma from '@/lib/db'
 import { parseTags } from '@/lib/utils'
 import { CACHE_TAG, PAGE_REVALIDATE } from '@/lib/cache-tags'
-import { decodeRouteParam, routeParamCandidates } from '@/lib/route-params'
 import {
   getPostAdjacencyBySeriesId,
   getSeriesPosts,
@@ -10,6 +9,7 @@ import {
 } from '@/lib/post-navigation'
 import { getSeriesCatalog } from '@/lib/series-catalog'
 import { buildWikiSlugMap } from '@/lib/wiki-links'
+import { normalizeSlugCandidates } from '@/lib/post-slug'
 import type { PostMeta } from '@/types'
 import type { Post } from '@prisma/client'
 
@@ -261,29 +261,33 @@ export type PublishedPostWithSeries = Post & {
 export async function getPublishedPostCached(
   slug: string
 ): Promise<PublishedPostWithSeries | null> {
-  const normalized = decodeRouteParam(slug)
+  const candidates = normalizeSlugCandidates(slug)
+  // 缓存键用解码后的 id，避免同一篇文章因编码差异产生多份缓存
+  const cacheKey = candidates[candidates.length - 1] ?? slug.trim()
+
   const post = await unstable_cache(
     async () => {
-      for (const id of routeParamCandidates(normalized)) {
+      const include = {
+        seriesLinks: {
+          orderBy: { order: 'asc' as const },
+          select: {
+            order: true,
+            series: { select: { id: true, name: true } },
+          },
+        },
+      }
+      for (const id of candidates) {
         const found = await prisma.post.findFirst({
           where: { id, status: 'PUBLISHED' },
-          include: {
-            seriesLinks: {
-              orderBy: { order: 'asc' },
-              select: {
-                order: true,
-                series: { select: { id: true, name: true } },
-              },
-            },
-          },
+          include,
         })
         if (found) return found
       }
       return null
     },
-    [`published-post-${normalized}-v3`],
+    [`published-post-${cacheKey}-v3`],
     {
-      tags: [CACHE_TAG.posts, CACHE_TAG.post(normalized)],
+      tags: [CACHE_TAG.posts, CACHE_TAG.post(cacheKey)],
       revalidate: PAGE_REVALIDATE.post,
     }
   )()

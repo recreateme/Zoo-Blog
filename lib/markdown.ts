@@ -13,6 +13,7 @@ import { type TocItem, type ParsedMarkdown, type MarkdownFrontmatter } from '@/t
 import { computePostStats } from './utils'
 import { createHeadingSlugger, slugifyHeading } from './heading-slug'
 import { ensureTags, parseSeriesMemberships } from './series-ops'
+import { isAsciiSlug, slugifyPostId } from './post-slug'
 
 // ============================================================
 // Markdown → HTML 转换
@@ -125,9 +126,10 @@ export function extractPostMeta(raw: string, filePath: string) {
       ? frontmatter.cover.trim()
       : null
 
-  // slug 优先从 frontmatter 取，其次从文件名
+  // slug 优先从 frontmatter 取，其次从文件名；非 ASCII 强制 slugify，避免公开页 404
   const filename = filePath.split('/').pop()?.replace(/\.md$/, '') ?? 'untitled'
-  const id = typeof frontmatter.slug === 'string' ? frontmatter.slug : filename
+  const rawId = (typeof frontmatter.slug === 'string' ? frontmatter.slug : filename).trim()
+  const id = isAsciiSlug(rawId) ? rawId : slugifyPostId(String(frontmatter.title ?? rawId))
 
   const outline = Array.isArray(frontmatter.outline)
     ? frontmatter.outline.filter(

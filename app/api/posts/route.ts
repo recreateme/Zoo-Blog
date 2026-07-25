@@ -15,7 +15,7 @@ const CreatePostSchema = z.object({
   id: z.string().min(1).max(100),
   title: z.string().min(1).max(200),
   content: z.string(),
-  category: z.string().optional().default('others'),
+  category: z.string().optional().default(''),
   subcategory: z.string().optional(),
   series: z.string().optional(),
   seriesOrder: z.number().int().optional(),
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl
   const status = searchParams.get('status')
-  const category = searchParams.get('category')
+  const seriesName = searchParams.get('series')?.trim()
   const q = searchParams.get('q')?.trim()
   const seriesOptions = searchParams.get('seriesOptions') === '1'
 
@@ -61,13 +61,24 @@ export async function GET(req: NextRequest) {
 
   const where: Prisma.PostWhereInput = {}
   if (status) where.status = status
-  if (category) where.category = category
-  if (q) {
+  if (seriesName) {
     where.OR = [
+      { series: seriesName },
+      { seriesLinks: { some: { series: { name: seriesName } } } },
+    ]
+  }
+  if (q) {
+    const textOr: Prisma.PostWhereInput[] = [
       { title: { contains: q } },
       { summary: { contains: q } },
       { id: { contains: q } },
     ]
+    if (where.OR) {
+      where.AND = [{ OR: where.OR }, { OR: textOr }]
+      delete where.OR
+    } else {
+      where.OR = textOr
+    }
   }
 
   const [posts, total] = await Promise.all([
@@ -103,7 +114,6 @@ export async function GET(req: NextRequest) {
         name: l.series.name,
         order: l.order,
       })),
-      series: p.seriesLinks[0]?.series.name ?? p.series,
     })),
     total,
     page,
@@ -145,7 +155,7 @@ export async function POST(req: NextRequest) {
         id: data.id,
         title: data.title,
         content: data.content,
-        category: data.category || 'others',
+        category: data.category || '',
         subcategory: data.subcategory ?? null,
         series,
         seriesOrder: primary?.order ?? null,

@@ -8,7 +8,11 @@ import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
 import type { PostMeta } from '@/types'
 
-type AdminPostRow = PostMeta & { filePath?: string | null; updatedAt?: Date }
+type AdminPostRow = PostMeta & {
+  filePath?: string | null
+  updatedAt?: Date
+  seriesList?: { id: string; name: string; order: number | null }[]
+}
 
 export default function PostsPage() {
   const [posts, setPosts] = useState<AdminPostRow[]>([])
@@ -16,13 +20,23 @@ export default function PostsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [seriesFilter, setSeriesFilter] = useState('')
+  const [seriesOptions, setSeriesOptions] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const [deleting, setDeleting] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/posts?seriesOptions=1')
+      .then((r) => r.json())
+      .then((d) => setSeriesOptions(d.series ?? []))
+      .catch(() => {})
+  }, [])
 
   const fetchPosts = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ page: page.toString(), pageSize: '15' })
     if (statusFilter) params.set('status', statusFilter)
+    if (seriesFilter) params.set('series', seriesFilter)
     if (search.trim()) params.set('q', search.trim())
 
     const res = await fetch(`/api/posts?${params}`)
@@ -30,7 +44,7 @@ export default function PostsPage() {
     setPosts(data.posts ?? [])
     setTotal(data.total ?? 0)
     setLoading(false)
-  }, [page, statusFilter, search])
+  }, [page, statusFilter, seriesFilter, search])
 
   useEffect(() => {
     const timer = setTimeout(() => fetchPosts(), search ? 300 : 0)
@@ -51,9 +65,7 @@ export default function PostsPage() {
     }
 
     setDeleting(post.id)
-    const url = deleteFile
-      ? `/api/posts/${encodeURIComponent(post.id)}?deleteFile=1`
-      : `/api/posts/${encodeURIComponent(post.id)}`
+    const url = deleteFile ? `/api/posts/${post.id}?deleteFile=1` : `/api/posts/${post.id}`
     await fetch(url, { method: 'DELETE' })
     setDeleting(null)
     fetchPosts()
@@ -84,13 +96,14 @@ export default function PostsPage() {
         <div className="relative flex-1 min-w-40">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
           <input
-            type="search"
-            placeholder="搜索标题 / slug…"
+            type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="input py-1.5 text-sm w-full pl-8"
+            placeholder="搜索标题或 slug…"
+            className="input pl-8 py-1.5 text-sm"
           />
         </div>
+
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
@@ -99,6 +112,17 @@ export default function PostsPage() {
           <option value="">全部状态</option>
           <option value="PUBLISHED">已发布</option>
           <option value="DRAFT">草稿</option>
+        </select>
+
+        <select
+          value={seriesFilter}
+          onChange={(e) => { setSeriesFilter(e.target.value); setPage(1) }}
+          className="input py-1.5 text-sm w-auto max-w-[12rem]"
+        >
+          <option value="">全部专题</option>
+          {seriesOptions.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
         </select>
       </div>
 
@@ -159,25 +183,26 @@ export default function PostsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Link href={`/post/${post.id}`} target="_blank" className="btn btn-ghost p-1.5" title="预览">
+                      <Link href={`/post/${encodeURIComponent(post.id)}`} target="_blank" className="btn btn-ghost p-1.5" title="预览">
                         <Eye size={14} />
                       </Link>
                       <Link href={`/admin/editor/${post.id}`} className="btn btn-ghost p-1.5" title="编辑">
                         <PenSquare size={14} />
                       </Link>
                       <a
-                        href={`/api/posts/${encodeURIComponent(post.id)}/export`}
+                        href={`/api/posts/${post.id}/export`}
                         className="btn btn-ghost p-1.5"
-                        title="下载 zip"
+                        title="导出 ZIP"
                       >
                         <Download size={14} />
                       </a>
                       <button
+                        type="button"
                         onClick={() => handleDelete(post)}
                         disabled={deleting === post.id}
                         className="btn btn-ghost p-1.5"
                         title="删除"
-                        style={{ color: '#dc2626' }}
+                        style={{ color: 'var(--danger, #c44)' }}
                       >
                         {deleting === post.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                       </button>
@@ -191,26 +216,26 @@ export default function PostsPage() {
       </div>
 
       {total > 15 && (
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-meta">
-            第 {page} 页，共 {Math.ceil(total / 15)} 页
+        <div className="flex justify-center gap-2 mt-4">
+          <button
+            type="button"
+            className="btn btn-secondary text-sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            上一页
+          </button>
+          <span className="text-xs self-center text-meta">
+            {page} / {Math.ceil(total / 15)}
           </span>
-          <div className="flex gap-2">
-            <button
-              className="btn btn-secondary text-sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              上一页
-            </button>
-            <button
-              className="btn btn-secondary text-sm"
-              disabled={page >= Math.ceil(total / 15)}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              下一页
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn-secondary text-sm"
+            disabled={page >= Math.ceil(total / 15)}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            下一页
+          </button>
         </div>
       )}
     </div>
