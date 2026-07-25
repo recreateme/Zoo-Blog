@@ -42,6 +42,9 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+# sharp 为动态 import，standalone 追踪可能遗漏；显式拷贝以保证封面处理可用
+COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
+COPY --from=builder /app/node_modules/@img ./node_modules/@img
 
 # 确保上传目录存在，并让运行用户可写 .next 缓存
 RUN mkdir -p ./public/uploads \
@@ -52,6 +55,8 @@ USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+# 1GB VPS：限制 Node 堆，给 sharp / Meilisearch 留出余量
+ENV NODE_OPTIONS="--max-old-space-size=384"
 
 # 启动前同步数据库结构，再启动 Next.js
 CMD ["sh", "-c", "node node_modules/prisma/build/index.js db push --skip-generate && node server.js"]

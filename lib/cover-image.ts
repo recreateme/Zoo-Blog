@@ -167,16 +167,26 @@ async function downloadPublicImage(rawUrl: string): Promise<Buffer> {
 async function convertToWebp(buffer: Buffer): Promise<Buffer> {
   try {
     const sharp = (await import('sharp')).default
-    const metadata = await sharp(buffer).metadata()
+    const options = {
+      limitInputPixels: 4096 * 4096,
+      sequentialRead: true,
+    } as const
+    // 低内存 VPS：限制像素与串行读取，避免 sharp 峰值打爆 1GB 机器
+    const metadata = await sharp(buffer, options).metadata()
     if (!metadata.format || !metadata.width || !metadata.height) {
       throw new Error('invalid image')
     }
-    return await sharp(buffer)
+    return await sharp(buffer, options)
       .rotate()
-      .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 82 })
+      .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 78, effort: 4 })
       .toBuffer()
-  } catch {
+  } catch (err) {
+    if (err instanceof CoverImageError) throw err
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/memory|allocation|heap/i.test(msg)) {
+      throw new CoverImageError('服务器处理封面时内存不足，请压缩图片到 1MB 以内后再试')
+    }
     throw new CoverImageError('封面文件不是有效图片，或图片格式不受支持')
   }
 }
@@ -188,6 +198,10 @@ function safeSlugPart(slug: string): string {
 async function prepareCover(buffer: Buffer, slug: string): Promise<PreparedCoverImage> {
   if (buffer.length === 0) throw new CoverImageError('封面图片为空')
   if (buffer.length > MAX_COVER_BYTES) throw new CoverImageError('封面图片不能超过 8MB')
+  // 1GB VPS 上建议更小；超过 2MB 仍允许但提示风险走转换
+  if (buffer.length > 2 * 1024 * 1024) {
+    console.warn(`[cover] large cover ${buffer.length} bytes for slug=${slug}`)
+  }
 
   const processed = await convertToWebp(buffer)
   const fileName = `${safeSlugPart(slug)}-${randomUUID().slice(0, 8)}.webp`
@@ -198,11 +212,50 @@ async function prepareCover(buffer: Buffer, slug: string): Promise<PreparedCover
   }
 }
 
+function sniffImageMime(buffer: Buffer): string | null {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
+    return 'image/png'
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp'
+  }
+  if (buffer.length >= 6 && (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a')) {
+    return 'image/gif'
+  }
+  return null
+}
+
 export async function prepareLocalCover(
-  input: LocalCoverInput,
+  input: LocalCoverInput & { fileName?: string },
   slug: string
 ): Promise<PreparedCoverImage> {
-  if (!ALLOWED_LOCAL_MIME_TYPES.has(input.mimeType)) {
+  let mime = (input.mimeType || '').toLowerCase().trim()
+  if (!ALLOWED_LOCAL_MIME_TYPES.has(mime)) {
+    const sniffed = sniffImageMime(input.buffer)
+    if (sniffed) mime = sniffed
+  }
+  if (!ALLOWED_LOCAL_MIME_TYPES.has(mime)) {
+    const name = input.fileName || ''
+    if (/\.jpe?g$/i.test(name)) mime = 'image/jpeg'
+    else if (/\.png$/i.test(name)) mime = 'image/png'
+    else if (/\.webp$/i.test(name)) mime = 'image/webp'
+    else if (/\.gif$/i.test(name)) mime = 'image/gif'
+    else if (/\.avif$/i.test(name)) mime = 'image/avif'
+  }
+  if (!ALLOWED_LOCAL_MIME_TYPES.has(mime)) {
     throw new CoverImageError('本地封面仅支持 JPG、PNG、WebP、GIF 或 AVIF')
   }
   return prepareCover(input.buffer, slug)

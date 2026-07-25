@@ -27,6 +27,10 @@ import { syncPostLinksForContent, buildWikiSlugMap } from '@/lib/wiki-links'
 import { applyRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
+export const runtime = 'nodejs'
+export const maxDuration = 180
+export const dynamic = 'force-dynamic'
+
 const MetaSchema = z.object({
   slug: z.string().min(1).max(100).optional(),
   title: z.string().min(1).max(200).optional(),
@@ -63,6 +67,7 @@ export async function POST(req: NextRequest) {
   let persistedCover: PreparedCoverImage | null = null
 
   try {
+    console.info('[import] start')
     const form = await req.formData()
     const file = form.get('file')
     if (!(file instanceof File)) {
@@ -81,6 +86,12 @@ export async function POST(req: NextRequest) {
     const coverFile = coverFileValue instanceof File && coverFileValue.size > 0
       ? coverFileValue
       : null
+    if (coverFile && coverFile.size > 8 * 1024 * 1024) {
+      return NextResponse.json({ error: '封面图片不能超过 8MB' }, { status: 400 })
+    }
+    if (coverFile && coverFile.size > 2 * 1024 * 1024) {
+      console.warn(`[import] large cover bytes=${coverFile.size} name=${coverFile.name}`)
+    }
     if (coverFile && meta.coverImage?.trim()) {
       return NextResponse.json(
         { error: '本地封面与公网图片地址只能选择一种' },
@@ -125,6 +136,7 @@ export async function POST(req: NextRequest) {
         {
           buffer: Buffer.from(await coverFile.arrayBuffer()),
           mimeType: coverFile.type,
+          fileName: coverFile.name,
         },
         slug
       )
@@ -223,6 +235,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    console.info(`[import] ok id=${post.id} path=${post.filePath}`)
     return NextResponse.json({
       success: true,
       post: {

@@ -83,6 +83,16 @@ export default function AdminUploadPage() {
       setError('封面图片不能超过 8MB')
       return
     }
+    if (coverMode === 'local' && coverFile && coverFile.size > 2 * 1024 * 1024) {
+      // 1GB VPS 上大图转 WebP 容易导致服务不可用（表现为 HTTP 503）
+      if (
+        !window.confirm(
+          `封面约 ${(coverFile.size / 1024 / 1024).toFixed(1)}MB，在当前服务器上处理可能失败。\n建议先压缩到 1MB 以内。仍要继续吗？`
+        )
+      ) {
+        return
+      }
+    }
     if (coverMode === 'remote' && coverUrl.trim()) {
       try {
         const url = new URL(coverUrl.trim())
@@ -118,6 +128,13 @@ export default function AdminUploadPage() {
         const detail = Array.isArray(data.details)
           ? `：${data.details.map((d: { message?: string }) => d.message).filter(Boolean).join('；')}`
           : ''
+        if (res.status === 503) {
+          setError(
+            (data.error || '导入失败：服务暂时不可用') +
+              '。常见原因是封面过大导致内存不足，请将封面压缩到 1MB 以内后重试；也可先不上传封面。'
+          )
+          return
+        }
         setError(`${data.error || `导入失败（HTTP ${res.status}）`}${detail}`)
         return
       }

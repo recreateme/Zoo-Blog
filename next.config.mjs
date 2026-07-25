@@ -10,6 +10,10 @@ const nextConfig = {
   },
   experimental: {
     serverComponentsExternalPackages: ['sharp', 'mammoth', '@anthropic-ai/sdk'],
+    outputFileTracingIncludes: {
+      '/api/posts/import': ['./node_modules/sharp/**/*', './node_modules/@img/**/*'],
+      '/*': ['./node_modules/sharp/**/*', './node_modules/@img/**/*'],
+    },
   },
   async headers() {
     return [
