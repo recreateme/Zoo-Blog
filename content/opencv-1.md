@@ -1,5 +1,5 @@
 ---
-title: Untitled
+title: 'OpenCV已经将图像处理(识别)的算法写成函数了,那我们还有必要去学习这些算法不？'
 slug: opencv-1
 tags:
   - opencv
