@@ -120,37 +120,47 @@ def main() -> int:
     upsert_env_remote(client, repo, "DEPLOY_HOOK_TOKEN", token)
     save_local_token(token, hook_url)
 
+    # 停止旧的手工进程 / 旧 unit，安装 systemd 开机自启
+    unit_src = ROOT / "scripts" / "blog-admin-hook.service"
+    if not unit_src.exists():
+        print(f"[hook-setup] 缺少 {unit_src}", file=sys.stderr)
+        client.close()
+        return 1
+
     run(
         client,
+        "systemctl stop blog-admin-hook 2>/dev/null || true; "
         "pkill -f 'scripts/admin-hook-server.py' 2>/dev/null || true; "
         "fuser -k 9090/tcp 2>/dev/null || true",
     )
     time.sleep(1)
 
-    starter = f"""#!/bin/bash
-cd {repo}
-export DEPLOY_HOOK_TOKEN='{token}'
-exec python3 scripts/admin-hook-server.py >> {HOOK_LOG} 2>&1
-"""
     sftp = client.open_sftp()
-    with sftp.file(HOOK_SCRIPT, "w") as f:
-        f.write(starter)
+    with sftp.file("/tmp/blog-admin-hook.service", "w") as f:
+        f.write(unit_src.read_text(encoding="utf-8"))
     sftp.close()
-    run(client, f"chmod +x {HOOK_SCRIPT}")
+
+    # unit 内路径默认 /var/www/blog/Zoo-Blog；若 repo 不同则 sed 替换
     run(
         client,
-        f"nohup {HOOK_SCRIPT} </dev/null >/dev/null 2>&1 & echo started",
+        "cp /tmp/blog-admin-hook.service /etc/systemd/system/blog-admin-hook.service && "
+        f"sed -i 's|/var/www/blog/Zoo-Blog|{repo}|g' /etc/systemd/system/blog-admin-hook.service && "
+        "systemctl daemon-reload && "
+        "systemctl enable --now blog-admin-hook && "
+        "systemctl is-enabled blog-admin-hook && "
+        "systemctl is-active blog-admin-hook",
     )
     time.sleep(2)
 
     _, health = run(client, "curl -sS http://127.0.0.1:9090/health || true")
     if "admin-hook" not in health:
         print("[hook-setup] health 检查未通过", file=sys.stderr)
+        run(client, "systemctl status blog-admin-hook --no-pager -l | head -n 40 || true")
         run(client, f"tail -n 40 {HOOK_LOG} || true")
         client.close()
         return 1
 
-    print("[hook-setup] hook 已就绪")
+    print("[hook-setup] systemd blog-admin-hook 已启用并运行")
 
     run(
         client,

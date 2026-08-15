@@ -1,0 +1,26 @@
+[Unit]
+Description=Knowledge Blog admin hook (git-sync / deploy-vps)
+Documentation=file:///var/www/blog/Zoo-Blog/docs/OPERATIONS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/blog/Zoo-Blog
+Environment=REPO_DIR=/var/www/blog/Zoo-Blog
+Environment=VPS_REPO_DIR=/var/www/blog/Zoo-Blog
+Environment=ADMIN_HOOK_HOST=0.0.0.0
+Environment=ADMIN_HOOK_PORT=9090
+# DEPLOY_HOOK_TOKEN 由脚本从仓库 .env / .deploy.env 读取，勿写进 unit
+ExecStart=/usr/bin/python3 /var/www/blog/Zoo-Blog/scripts/admin-hook-server.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+StandardOutput=append:/var/log/blog-admin-hook.log
+StandardError=append:/var/log/blog-admin-hook.log
+
+# 限制对公网暴露风险由防火墙控制；服务本身监听 0.0.0.0:9090 供 Docker 网桥访问
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

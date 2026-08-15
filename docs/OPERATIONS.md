@@ -369,15 +369,18 @@ chown -R 1001:65533 content public/uploads public/images
 
 ### 管理后台「推送到 GitHub」未就绪 / 失败（Docker）
 
-容器内通常没有可用的 `.git` 与 GitHub 凭据。推荐在**宿主机**跑 Hook：
+容器内通常没有可用的 `.git` 与 GitHub 凭据。推荐在**宿主机**用 systemd 常驻 Hook（开机自启）：
 
 ```bash
 cd /var/www/blog/Zoo-Blog
-# 与 .env 中 DEPLOY_HOOK_TOKEN 保持一致
-export DEPLOY_HOOK_TOKEN='your-shared-secret'
-# 宿主机需已配置 git remote 可 push（SSH key 或 credential）
-nohup python3 scripts/admin-hook-server.py >> /var/log/blog-admin-hook.log 2>&1 &
+# 仓库 .env 中需有 DEPLOY_HOOK_TOKEN（与下方一致）
+sudo cp scripts/blog-admin-hook.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now blog-admin-hook
+sudo systemctl status blog-admin-hook --no-pager
 ```
+
+本地一键配置也可：`python scripts/setup-admin-hook-vps.py`（会写入 token 并安装/启动该 unit）。
 
 在服务器 `.env` 增加（然后 `docker compose up -d app`）：
 
@@ -392,8 +395,11 @@ DEPLOY_HOOK_TOKEN=your-shared-secret
 
 ```bash
 curl -s http://127.0.0.1:9090/health
+systemctl is-enabled blog-admin-hook
 # 管理后台「设置」页 GitHub 推送应显示 Hook / 就绪
 ```
+
+日志：`/var/log/blog-admin-hook.log` 或 `journalctl -u blog-admin-hook -f`。
 
 也可在宿主机直接：`python3 scripts/git_sync.py -m "chore: publish content"`。
 
