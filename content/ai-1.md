@@ -1,9 +1,11 @@
 ---
 title: 2026 年 AI 应用工具合集：从基础模型到场景实战
-slug: ai-1
+slug: ai-tools-collection-2026
 tags:
-  - ai应用
-  - 合集概要
+  - ai
+  - tools
+  - llm
+  - 合集
 status: published
 cover: /images/covers/ai-1-fce99921.webp
 publishedAt: '2026-08-07'

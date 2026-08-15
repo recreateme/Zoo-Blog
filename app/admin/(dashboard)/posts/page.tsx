@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { PenSquare, Trash2, Eye, Search, Plus, Loader2, Download } from 'lucide-react'
 import { formatDateShort } from '@/lib/utils'
@@ -24,6 +24,8 @@ export default function PostsPage() {
   const [seriesOptions, setSeriesOptions] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [batchDownloading, setBatchDownloading] = useState(false)
 
   useEffect(() => {
     fetch('/api/posts?seriesOptions=1')
@@ -51,6 +53,73 @@ export default function PostsPage() {
     return () => clearTimeout(timer)
   }, [fetchPosts, search])
 
+  useEffect(() => {
+    setSelected(new Set())
+  }, [page, statusFilter, seriesFilter, search])
+
+  const pageIds = useMemo(() => posts.map((p) => p.id), [posts])
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
+  const somePageSelected = pageIds.some((id) => selected.has(id))
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const togglePage = () => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allPageSelected) {
+        for (const id of pageIds) next.delete(id)
+      } else {
+        for (const id of pageIds) next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleBatchDownload = async () => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    if (ids.length > 50) {
+      alert('单次最多下载 50 篇，请减少选择')
+      return
+    }
+    setBatchDownloading(true)
+    try {
+      const res = await fetch('/api/posts/export-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || `下载失败（${res.status}）`)
+        return
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition') || ''
+      const match = /filename="([^"]+)"/.exec(cd)
+      const filename = match?.[1] || `notes-export-${ids.length}.zip`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('批量下载失败，请稍后重试')
+    } finally {
+      setBatchDownloading(false)
+    }
+  }
+
   const handleDelete = async (post: AdminPostRow) => {
     if (!confirm(`确定删除《${post.title}》？`)) return
 
@@ -68,6 +137,11 @@ export default function PostsPage() {
     const url = deleteFile ? `/api/posts/${post.id}?deleteFile=1` : `/api/posts/${post.id}`
     await fetch(url, { method: 'DELETE' })
     setDeleting(null)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.delete(post.id)
+      return next
+    })
     fetchPosts()
   }
 
@@ -80,16 +154,30 @@ export default function PostsPage() {
 
   return (
     <div className="admin-page">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <header>
           <h1 className="admin-page-title">笔记管理</h1>
           <p className="admin-page-lead">
             共 {total} 篇 · 文件绑定笔记以同步为准，后台笔记仅存在于数据库
           </p>
         </header>
-        <Link href="/admin/editor" className="btn btn-primary">
-          <Plus size={15} /> 新建笔记
-        </Link>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleBatchDownload}
+              disabled={batchDownloading}
+              title="将选中笔记打包为 ZIP 下载"
+            >
+              {batchDownloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              批量下载（{selected.size}）
+            </button>
+          )}
+          <Link href="/admin/editor" className="btn btn-primary">
+            <Plus size={15} /> 新建笔记
+          </Link>
+        </div>
       </div>
 
       <div className="admin-toolbar">
@@ -143,6 +231,17 @@ export default function PostsPage() {
           <table className="w-full">
             <thead>
               <tr className="admin-table-head">
+                <th className="admin-table-th w-10">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = somePageSelected && !allPageSelected
+                    }}
+                    onChange={togglePage}
+                    aria-label="全选本页"
+                  />
+                </th>
                 {['标题', '来源', '专题', '状态', '更新时间', '操作'].map((h) => (
                   <th key={h} className="admin-table-th">
                     {h}
@@ -154,6 +253,14 @@ export default function PostsPage() {
               {posts.map((post) => (
                 <tr key={post.id} className="admin-table-row group">
                   <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(post.id)}
+                      onChange={() => toggleOne(post.id)}
+                      aria-label={`选择 ${post.title}`}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
                     <Link
                       href={`/admin/editor/${post.id}`}
                       className="text-sm font-medium hover:text-[var(--accent)] transition-colors line-clamp-1"
@@ -161,11 +268,10 @@ export default function PostsPage() {
                     >
                       {post.title}
                     </Link>
-                    {post.readingTime && (
-                      <span className="text-xs mt-0.5 block" style={{ color: 'var(--text-tertiary)' }}>
-                        约 {post.readingTime} 分钟
-                      </span>
-                    )}
+                    <span className="text-xs mt-0.5 block" style={{ color: 'var(--text-tertiary)' }}>
+                      {post.id}
+                      {post.readingTime ? ` · 约 ${post.readingTime} 分钟` : ''}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={post.filePath ? 'tag' : 'status'}>
@@ -190,7 +296,7 @@ export default function PostsPage() {
                         <PenSquare size={14} />
                       </Link>
                       <a
-                        href={`/api/posts/${post.id}/export`}
+                        href={`/api/posts/${encodeURIComponent(post.id)}/export`}
                         className="btn btn-ghost p-1.5"
                         title="导出 ZIP"
                       >

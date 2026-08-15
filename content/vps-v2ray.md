@@ -2,8 +2,10 @@
 title: 2026年VPS推荐与V2ray节点搭建
 slug: vps-v2ray
 tags:
+  - vps
+  - v2ray
+  - proxy
   - 网络工具
-  - vpn
 status: published
 cover: /images/covers/vps-v2ray-43752e47.webp
 publishedAt: '2026-07-19'

@@ -1,15 +1,16 @@
 ---
 title: 'OpenCV已经将图像处理(识别)的算法写成函数了,那我们还有必要去学习这些算法不？'
-slug: opencv-1
+slug: why-learn-cv-algorithms
 tags:
   - opencv
+  - computer-vision
+  - zhihu
 status: published
 publishedAt: '2026-08-14'
 series:
   - name: 知乎回答
+  - name: 计算机视觉
 ---
-
-
 关于知乎问题：**OpenCV已经将图像处理(识别)的算法写成函数了,那我们还有必要去学习这些算法不?**
 
 https://www.zhihu.com/question/41477333/answer/2065779803756684930

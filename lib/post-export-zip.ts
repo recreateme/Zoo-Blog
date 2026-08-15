@@ -83,9 +83,11 @@ export interface ExportZipInput {
   coverImage?: string | null
 }
 
-/** 生成可离线打开的 zip：{slug}/{slug}.md + assets/ */
-export async function buildPostExportZip(input: ExportZipInput): Promise<Buffer> {
-  const zip = new JSZip()
+/** 将单篇笔记写入 zip 根下的 `{slug}/` 目录 */
+export async function appendPostToExportZip(
+  zip: JSZip,
+  input: ExportZipInput
+): Promise<void> {
   const folder = zip.folder(input.slug)!
   const assets = folder.folder('assets')!
 
@@ -135,6 +137,20 @@ export async function buildPostExportZip(input: ExportZipInput): Promise<Buffer>
     : `---\ntitle: ${JSON.stringify(input.title)}\nslug: ${input.slug}\n${coverLine}---\n\n${body}`
 
   folder.file(`${input.slug}.md`, fileContent)
+}
 
+/** 生成可离线打开的 zip：{slug}/{slug}.md + assets/ */
+export async function buildPostExportZip(input: ExportZipInput): Promise<Buffer> {
+  const zip = new JSZip()
+  await appendPostToExportZip(zip, input)
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+}
+
+/** 多篇笔记打成一个 zip，每篇一个 `{slug}/` 目录 */
+export async function buildPostsExportZip(inputs: ExportZipInput[]): Promise<Buffer> {
+  const zip = new JSZip()
+  for (const input of inputs) {
+    await appendPostToExportZip(zip, input)
+  }
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 }

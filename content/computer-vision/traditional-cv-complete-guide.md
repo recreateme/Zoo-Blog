@@ -14,7 +14,6 @@ publishedAt: '2026-07-14'
 series:
   - name: 计算机视觉
 ---
-
 > 一篇兼顾理论梳理与工程落地的传统视觉算法复习笔记 —— 从像素级操作到几何视觉，从单个算法到可直接落地的完整流水线。
 
 ![封面](/images/traditional-cv-cover.png)
