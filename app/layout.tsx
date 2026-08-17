@@ -1,10 +1,31 @@
 import type { Metadata } from 'next'
+import { Crimson_Pro, Mulish, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import Providers from '@/components/providers'
 import SiteShell from '@/components/layout/SiteShell'
 import { SITE_THEME_IDS } from '@/lib/themes'
 import { getSiteName, getSiteDescription } from '@/lib/site'
 import './globals.css'
+
+const crimsonPro = Crimson_Pro({
+  subsets: ['latin'],
+  weight: ['300', '400', '600'],
+  style: ['normal', 'italic'],
+  variable: '--font-crimson',
+  display: 'swap',
+})
+const mulish = Mulish({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  variable: '--font-mulish',
+  display: 'swap',
+})
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-jetbrains',
+  display: 'swap',
+})
 
 const siteName = getSiteName()
 const siteDescription = getSiteDescription()
@@ -26,15 +47,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html
+      lang="zh-CN"
+      className={`${crimsonPro.variable} ${mulish.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
-        {/* KaTeX CSS */}
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
           crossOrigin="anonymous"
         />
-        {/* highlight.js 由 CodeHighlightStyles 按 data-theme 动态加载 */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
       </head>

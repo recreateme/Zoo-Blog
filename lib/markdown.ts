@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import remarkRehype from 'remark-rehype'
 import rehypeKatex from 'rehype-katex'
-import rehypeHighlight from 'rehype-highlight'
+import rehypePrettyCode, { type Options as PrettyCodeOptions } from 'rehype-pretty-code'
 import rehypeSlug from 'rehype-slug'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 import rehypeStringify from 'rehype-stringify'
@@ -14,6 +14,15 @@ import { computePostStats } from './utils'
 import { createHeadingSlugger, slugifyHeading } from './heading-slug'
 import { ensureTags, parseSeriesMemberships } from './series-ops'
 import { isAsciiSlug, slugifyPostId } from './post-slug'
+
+const prettyCodeOptions: PrettyCodeOptions = {
+  theme: {
+    light: 'github-light',
+    dark: 'github-dark-dimmed',
+  },
+  keepBackground: false,
+  defaultLang: 'plaintext',
+}
 
 // ============================================================
 // Markdown → HTML 转换
@@ -32,7 +41,7 @@ export async function parseMarkdown(raw: string): Promise<ParsedMarkdown> {
     .use(remarkMath)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex, { strict: false })
-    .use(rehypeHighlight, { detect: true, ignoreMissing: true })
+    .use(rehypePrettyCode, prettyCodeOptions)
     .use(rehypeSlug)
     .use(rehypeAutolinkHeadings, {
       behavior: 'wrap',

@@ -45,6 +45,8 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 # sharp 为动态 import，standalone 追踪可能遗漏；显式拷贝以保证封面处理可用
 COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
 COPY --from=builder /app/node_modules/@img ./node_modules/@img
+COPY --from=builder /app/node_modules/shiki ./node_modules/shiki
+COPY --from=builder /app/node_modules/@shikijs ./node_modules/@shikijs
 
 # 确保上传目录存在，并让运行用户可写 .next 缓存
 RUN mkdir -p ./public/uploads \

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractToc, extractPostMeta, resolveWikiLinks } from '@/lib/markdown'
+import { extractToc, extractPostMeta, parseMarkdown, resolveWikiLinks } from '@/lib/markdown'
 
 describe('markdown', () => {
   it('extracts nested TOC with matching slugs', () => {
@@ -54,4 +54,17 @@ outline: [要点一, 要点二]
     const html = resolveWikiLinks('[[Missing]]', {})
     expect(html).toContain('wiki-link-missing')
   })
+
+  it('wraps unlabeled fences with pretty-code figure via defaultLang', async () => {
+    const { content } = await parseMarkdown('```\nprint(1)\n```\n')
+    expect(content).toContain('data-rehype-pretty-code-figure')
+    expect(content).toContain('data-language="plaintext"')
+  }, 30_000)
+
+  it('highlights labeled python fences with shiki themes', async () => {
+    const { content } = await parseMarkdown('```python\ndef hello():\n    return 1\n```\n')
+    expect(content).toContain('data-language="python"')
+    expect(content).toContain('--shiki-light')
+    expect(content).toContain('--shiki-dark')
+  }, 30_000)
 })
