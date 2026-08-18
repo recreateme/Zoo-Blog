@@ -27,6 +27,7 @@
   --theme-swatch-eye: linear-gradient(135deg, #E8F2E6 50%, #1B6B38 50%);
   --theme-swatch-parchment: linear-gradient(135deg, #F2E6C8 50%, #A0522D 50%);
   --theme-swatch-ink: linear-gradient(135deg, #EEF2F7 50%, #3B5BDB 50%);
+  --theme-swatch-zhihu: linear-gradient(135deg, #FFFFFF 50%, #175199 50%);
 }
 
 /* ── 1. 经典（默认）UI 琥珀 · 粒子青蓝 ── */
@@ -190,6 +191,51 @@
   --particle-link-color: #2F4BB5;
   --particle-link-opacity: 0.4;
   --particle-fallback-glow: rgba(59, 91, 219, 0.12);
+}
+
+/* ── 6. 知乎 白底黑字 · 无粒子（正文按 Markdown / 知乎阅读页） ── */
+[data-theme='zhihu'] {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --font-serif: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Segoe UI', sans-serif;
+
+  --accent:        #0066FF;
+  --accent-light:  #3D8AFF;
+  --accent-subtle: #E8F0FE;
+
+  --bg-base:     #FFFFFF;
+  --bg-surface:  #F6F6F6;
+  --bg-elevated: #FFFFFF;
+  --bg-sunken:   #F6F6F6;
+
+  --text-primary:   #121212;
+  --text-secondary: #444444;
+  --text-tertiary:  #8590A6;
+  --text-accent:    #175199;
+
+  --border-subtle:  rgba(18, 18, 18, 0.06);
+  --border-default: rgba(18, 18, 18, 0.12);
+  --border-strong:  rgba(18, 18, 18, 0.22);
+
+  --shadow-sm: 0 1px 2px rgba(18, 18, 18, 0.04);
+  --shadow-md: 0 4px 12px rgba(18, 18, 18, 0.06);
+  --shadow-lg: 0 8px 24px rgba(18, 18, 18, 0.08);
+
+  --particle-color: #FFFFFF;
+  --particle-link-color: #FFFFFF;
+  --particle-link-opacity: 0;
+  --particle-fallback-glow: transparent;
+
+  --code-bg: #F6F8FA;
+  --code-border: rgba(18, 18, 18, 0.1);
+  --code-fg: #121212;
+  --code-inline-bg: #F4F4F5;
+  --code-inline-fg: #121212;
+}
+
+[data-theme='zhihu'] .site-particles-shell {
+  display: none;
 }
 
 /* ============================================================
@@ -2345,6 +2391,104 @@
   .markdown-body pre code > [data-line] {
     padding-left: 2.25em;
   }
+}
+
+/* 知乎风 · 正文 Markdown（简洁阅读，保留代码块/表格等基础能力） */
+[data-theme='zhihu'] .post-title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+[data-theme='zhihu'] .post-summary {
+  font-family: var(--font-sans);
+  font-style: normal;
+  border-left: none;
+  padding-left: 0;
+  color: var(--text-secondary);
+}
+
+[data-theme='zhihu'] .markdown-body {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+[data-theme='zhihu'] .markdown-body h1,
+[data-theme='zhihu'] .markdown-body h2,
+[data-theme='zhihu'] .markdown-body h3,
+[data-theme='zhihu'] .markdown-body h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+[data-theme='zhihu'] .markdown-body h2 {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+[data-theme='zhihu'] .markdown-body a {
+  color: var(--text-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  text-underline-offset: 2px;
+  transition: border-color 0.15s;
+}
+
+[data-theme='zhihu'] .markdown-body a:hover {
+  border-bottom-color: var(--text-accent);
+}
+
+[data-theme='zhihu'] .markdown-body blockquote {
+  margin: 1em 0;
+  padding: 0.25em 0 0.25em 1em;
+  border-left: 3px solid #C5C5C5;
+  background: transparent;
+  border-radius: 0;
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-size: inherit;
+  color: var(--text-secondary);
+}
+
+[data-theme='zhihu'] .markdown-body em {
+  font-style: italic;
+}
+
+[data-theme='zhihu'] .markdown-body strong {
+  font-weight: 600;
+}
+
+[data-theme='zhihu'] .markdown-body code {
+  color: var(--code-inline-fg);
+  background: var(--code-inline-bg);
+  border: none;
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+}
+
+[data-theme='zhihu'] .markdown-body img {
+  border: none;
+  border-radius: 2px;
+}
+
+[data-theme='zhihu'] .markdown-body li::marker {
+  color: var(--text-tertiary);
+}
+
+[data-theme='zhihu'] .markdown-body th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: inherit;
+}
+
+[data-theme='zhihu'] .wiki-link {
+  color: var(--text-accent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--text-accent) 55%, transparent);
+}
+
+[data-theme='zhihu'] .card {
+  box-shadow: none;
 }
 
 /* GFM 任务列表（- [ ] / - [x]） */

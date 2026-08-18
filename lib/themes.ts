@@ -4,6 +4,7 @@ export const SITE_THEMES = [
   { id: 'eye', label: '护眼', description: '豆沙绿底 · 森林绿粒子' },
   { id: 'parchment', label: '羊皮卷', description: '复古纸色 · 赭石粒子' },
   { id: 'ink', label: '墨韵', description: '冷灰纸感 · 靛蓝粒子' },
+  { id: 'zhihu', label: '知乎', description: '白底黑字 · 无粒子' },
 ] as const
 
 export type SiteThemeId = (typeof SITE_THEMES)[number]['id']
@@ -12,4 +13,9 @@ export const SITE_THEME_IDS: SiteThemeId[] = SITE_THEMES.map((t) => t.id)
 
 export function isSiteThemeId(value: string): value is SiteThemeId {
   return SITE_THEME_IDS.includes(value as SiteThemeId)
+}
+
+/** 知乎风阅读页关闭粒子，其余主题保持原特效 */
+export function themeUsesParticles(theme: string | undefined): boolean {
+  return theme !== 'zhihu'
 }

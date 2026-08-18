@@ -6,6 +6,7 @@ import Particles, { ParticlesProvider, useParticlesProvider } from '@tsparticles
 import { loadSlim } from '@tsparticles/slim'
 import { useTheme } from 'next-themes'
 import type { ISourceOptions } from '@tsparticles/engine'
+import { themeUsesParticles } from '@/lib/themes'
 
 async function initParticles(engine: Parameters<typeof loadSlim>[0]) {
   await loadSlim(engine)
@@ -125,6 +126,10 @@ function SiteParticlesCanvas() {
 
   if (!mounted) {
     return <div className="site-particles-shell site-particles-fallback" aria-hidden />
+  }
+
+  if (!themeUsesParticles(resolvedTheme)) {
+    return null
   }
 
   if (reduceMotion) {
