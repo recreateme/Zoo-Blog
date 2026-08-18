@@ -108,8 +108,8 @@ knowledge-blog/
 | `app/(public)/ask/` | RAG 问答页 | 需 Qdrant + Embedding |
 | `app/admin/(dashboard)/` | 仪表盘、笔记、上传、专题、标签、编辑器、附件、设置 | Sidebar：`AdminSidebar.tsx` |
 | `app/admin/login/` | 登录表单 | 鉴权逻辑在 `lib/auth.ts` |
-| `app/api/posts/` | CRUD、import、export zip | 写盘见 `lib/content-write` |
-| `app/api/series/`、`tags/` | 专题/标签管理 API | |
+| `app/api/posts/` | CRUD、import、import-batch、export zip | 写盘见 `lib/content-write` |
+| `app/api/series/`、`tags/` | 专题/标签管理；`[id]/export` 整专题导出 | |
 | `app/api/admin/*` | git-sync、deploy-vps、deploy-status | 读 `.deploy.env`，不落库密钥 |
 | `app/api/sync/` | content → DB 同步 | `SYNC_SECRET` / 管理员 Session |
 | `app/api/search/` | 搜索 + reindex | |
@@ -269,6 +269,7 @@ status: published
 | 首页列表样式 | `app/(public)/page.tsx`、`PostCard.tsx`、`globals.css` |
 | 文章排版 / TOC | `app/(public)/post/[slug]/page.tsx`、`components/post/*`、`globals.css` |
 | Frontmatter 字段 | `lib/markdown.ts` + `lib/content-write.ts` + `docs/WRITING.md` |
+| 专题批量导入 | `lib/post-batch-import.ts`、`app/api/posts/import-batch/`、`upload/BatchImportPanel.tsx` |
 | 专题排序规则 | `lib/series-queries.ts`、`lib/post-navigation.ts` |
 | 搜索相关性/筛选 | `lib/search-index.ts`、`SearchClient.tsx` |
 | 主题颜色 | `app/globals.css`、`lib/themes.ts` |

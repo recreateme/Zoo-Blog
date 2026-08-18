@@ -4,11 +4,14 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { ImagePlus, Link2, Upload, Plus, X } from 'lucide-react'
+import BatchImportPanel from './BatchImportPanel'
 
 type SeriesRow = { name: string; order: number | null }
+type SeriesOption = { id: string; name: string }
 
 export default function AdminUploadPage() {
   const router = useRouter()
+  const [tab, setTab] = useState<'single' | 'batch'>('single')
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
@@ -18,6 +21,7 @@ export default function AdminUploadPage() {
   const [seriesName, setSeriesName] = useState('')
   const [seriesOrder, setSeriesOrder] = useState('')
   const [seriesSuggestions, setSeriesSuggestions] = useState<string[]>([])
+  const [seriesList, setSeriesList] = useState<SeriesOption[]>([])
   const [subdir, setSubdir] = useState('')
   const [coverMode, setCoverMode] = useState<'local' | 'remote'>('local')
   const [coverFile, setCoverFile] = useState<File | null>(null)
@@ -34,7 +38,10 @@ export default function AdminUploadPage() {
   useEffect(() => {
     fetch('/api/posts?seriesOptions=1')
       .then((r) => r.json())
-      .then((d) => setSeriesSuggestions(d.series ?? []))
+      .then((d) => {
+        setSeriesSuggestions(d.series ?? [])
+        setSeriesList(d.seriesList ?? [])
+      })
       .catch(() => {})
   }, [])
 
@@ -172,14 +179,37 @@ export default function AdminUploadPage() {
   }
 
   return (
-    <div className="max-w-2xl">
+    <div className={tab === 'batch' ? 'max-w-5xl' : 'max-w-2xl'}>
       <header className="mb-6">
         <h1 className="text-display text-2xl mb-1">上传笔记</h1>
         <p className="text-lead text-sm">
           选择本地 Markdown，写入 <code className="text-xs">content/</code> 并入库
         </p>
+        <div className="flex gap-2 mt-4" role="tablist" aria-label="导入方式">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'single'}
+            className={`btn ${tab === 'single' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTab('single')}
+          >
+            单篇导入
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'batch'}
+            className={`btn ${tab === 'batch' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTab('batch')}
+          >
+            批量导入专题
+          </button>
+        </div>
       </header>
 
+      {tab === 'batch' ? (
+        <BatchImportPanel seriesList={seriesList} />
+      ) : (
       <form onSubmit={handleSubmit} className="space-y-5">
         <label className="block">
           <span className="text-meta mb-1.5 block">Markdown 文件</span>
@@ -416,6 +446,7 @@ export default function AdminUploadPage() {
           {busy ? '导入中…' : '写入 content/ 并入库'}
         </button>
       </form>
+      )}
     </div>
   )
 }

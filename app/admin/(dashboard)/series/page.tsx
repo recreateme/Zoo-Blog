@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, Download, Loader2 } from 'lucide-react'
 
 type SeriesItem = {
   id: string
@@ -19,6 +19,7 @@ export default function AdminSeriesPage() {
   const [description, setDescription] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const [exportingId, setExportingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -57,6 +58,45 @@ export default function AdminSeriesPage() {
       await load()
     } finally {
       setBusy(false)
+    }
+  }
+
+  const exportAll = async (id: string, seriesName: string) => {
+    setExportingId(id)
+    setMsg('')
+    try {
+      const res = await fetch(`/api/series/${encodeURIComponent(id)}/export`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setMsg(data.error || `导出失败（${res.status}）`)
+        return
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition') || ''
+      const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+      const quoted = /filename="([^"]+)"/.exec(cd)
+      let filename = `${seriesName}-全部笔记.zip`
+      if (star?.[1]) {
+        try {
+          filename = decodeURIComponent(star[1])
+        } catch {
+          filename = quoted?.[1] || filename
+        }
+      } else if (quoted?.[1]) {
+        filename = quoted[1]
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setMsg('导出失败，请稍后重试')
+    } finally {
+      setExportingId(null)
     }
   }
 
@@ -137,14 +177,26 @@ export default function AdminSeriesPage() {
                   {s.description ? ` · ${s.description}` : ''}
                 </p>
               </div>
-              <button
-                type="button"
-                className="btn btn-ghost text-xs shrink-0"
-                onClick={() => remove(s.id, s.name)}
-                disabled={busy}
-              >
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  className="btn btn-ghost text-xs"
+                  onClick={() => exportAll(s.id, s.name)}
+                  disabled={busy || exportingId === s.id}
+                  title="导出该专题全部笔记"
+                >
+                  {exportingId === s.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  导出全部
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost text-xs"
+                  onClick={() => remove(s.id, s.name)}
+                  disabled={busy}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </li>
           ))}
           {items.length === 0 && <li className="text-meta py-6">暂无专题</li>}
